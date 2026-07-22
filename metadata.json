@@ -1,0 +1,6 @@
+{
+  "name": "Fluxo",
+  "description": "Aplicativo completo de gestão financeira pessoal com IA, extrato, metas, orçamentos, gráficos, relatórios e planos Premium.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
