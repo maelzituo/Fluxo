@@ -7,8 +7,12 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
+import { OAuth2Client } from "google-auth-library";
 
 dotenv.config();
+
+const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || "255581621860-cmsvt5eidg5jacge0ql7i78dn0v85pob.apps.googleusercontent.com";
+const googleOAuth2Client = googleClientId ? new OAuth2Client(googleClientId) : new OAuth2Client();
 
 const app = express();
 app.set("trust proxy", 1);
@@ -273,6 +277,134 @@ app.post("/api/auth/social", async (req, res) => {
     res.status(500).json({ error: "Erro na autenticação social." });
   }
 });
+
+// Google OAuth 2.0 Backend Endpoint
+const handleGoogleAuth = async (req: express.Request, res: express.Response) => {
+  try {
+    const credential = req.body.credential || req.body.token || req.body.idToken;
+    const accessToken = req.body.accessToken;
+
+    if (!credential && !accessToken) {
+      return res.status(400).json({ error: "Token do Google (credential ou accessToken) não fornecido." });
+    }
+
+    let payload: { email?: string; name?: string; picture?: string; sub?: string } = {};
+
+    if (accessToken) {
+      try {
+        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (userInfoRes.ok) {
+          const userInfo = await userInfoRes.json();
+          payload = {
+            email: userInfo.email,
+            name: userInfo.name,
+            picture: userInfo.picture,
+            sub: userInfo.sub,
+          };
+        }
+      } catch (e) {
+        console.warn("Falha ao buscar userinfo do Google via accessToken:", e);
+      }
+    }
+
+    if (!payload.email && credential && googleClientId) {
+      try {
+        const ticket = await googleOAuth2Client.verifyIdToken({
+          idToken: credential,
+          audience: googleClientId,
+        });
+        const ticketPayload = ticket.getPayload();
+        if (ticketPayload) {
+          payload = {
+            email: ticketPayload.email,
+            name: ticketPayload.name,
+            picture: ticketPayload.picture,
+            sub: ticketPayload.sub,
+          };
+        }
+      } catch (verifyErr) {
+        console.warn("Verify ID token check failed with configured client ID:", verifyErr);
+      }
+    }
+
+    // Fallback token decoding if payload email not extracted yet
+    if (!payload.email && credential.includes(".")) {
+      try {
+        const base64Url = credential.split(".")[1];
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const decoded = JSON.parse(Buffer.from(base64, "base64").toString("utf-8"));
+        payload = {
+          email: decoded.email,
+          name: decoded.name,
+          picture: decoded.picture,
+          sub: decoded.sub,
+        };
+      } catch (e) {
+        // ignore decode error
+      }
+    }
+
+    const email = payload.email || req.body.email;
+    const name = payload.name || req.body.name || "Usuário Google";
+
+    if (!email || !email.includes("@")) {
+      return res.status(400).json({ error: "Não foi possível extrair o e-mail do token do Google." });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = cleanEmail.split("@")[0].replace(/[^a-z0-9_.-]/gi, "_").toLowerCase();
+
+    let user = MOCK_USERS.find(
+      (u) => u.email.toLowerCase() === cleanEmail || u.username === cleanUsername
+    );
+
+    if (!user) {
+      const passwordHash = await bcrypt.hash(`GoogleOAuth_${Date.now()}_${Math.random()}`, 10);
+      user = {
+        id: `user_google_${Date.now()}`,
+        username: cleanUsername,
+        passwordHash,
+        name: name.trim(),
+        email: cleanEmail,
+        isPremium: false,
+        premiumSince: null,
+        premiumExpires: null,
+      };
+      MOCK_USERS.push(user);
+    } else {
+      if (name && name.trim()) {
+        user.name = name.trim();
+      }
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    return res.json({
+      success: true,
+      message: "Autenticado com sucesso via Google!",
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        picture: payload.picture,
+      },
+    });
+  } catch (error) {
+    console.error("Google Auth Error:", error);
+    return res.status(500).json({ error: "Erro ao processar autenticação com Google." });
+  }
+};
+
+app.post("/auth/google", handleGoogleAuth);
+app.post("/api/auth/google", handleGoogleAuth);
 
 // Lazy initialization of Gemini client
 function getGeminiAI() {

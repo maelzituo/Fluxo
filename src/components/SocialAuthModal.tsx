@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { X, Loader2, CheckCircle2, ShieldCheck, ArrowRight } from "lucide-react";
+import { X, Loader2, ShieldCheck, ExternalLink } from "lucide-react";
+import { GoogleLogin, useGoogleLogin } from "@react-oauth/google";
 
 interface SocialAuthModalProps {
   provider: "google" | "apple" | null;
@@ -23,6 +24,62 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handlePopupGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setError(null);
+      setIsLoading(true);
+      try {
+        const response = await fetch("/auth/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accessToken: tokenResponse.access_token,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Erro na verificação do token do Google.");
+        }
+        onSuccess(data.token, data.user);
+      } catch (err: any) {
+        setError(err.message || "Falha na autenticação via Google.");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    onError: () => {
+      setError("Não foi possível autenticar. Certifique-se de autorizar a origem no Google Cloud Console.");
+    },
+  });
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          credential: credentialResponse.credential,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro na verificação do token do Google.");
+      }
+
+      onSuccess(data.token, data.user);
+    } catch (err: any) {
+      setError(err.message || "Falha na autenticação via Google.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,6 +174,32 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
           </div>
         )}
 
+        {isGoogle && (
+          <div className="flex flex-col items-center justify-center mb-4 space-y-2.5">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError("Janela do Google não respondeu. Tente a opção em pop-up abaixo ou verifique o Google Console.")}
+              useOneTap={false}
+              theme="outline"
+              size="large"
+              shape="pill"
+              text="continue_with"
+            />
+            
+            <button
+              type="button"
+              onClick={() => handlePopupGoogleLogin()}
+              disabled={isLoading}
+              className="w-full max-w-[240px] py-2 px-4 rounded-full border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+              <span>Abrir Pop-up de Login Google</span>
+            </button>
+
+            <p className="text-[10px] text-neutral-400 mt-1">ou valide com o seu e-mail abaixo:</p>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
             <label className="block text-xs font-bold text-neutral-700 mb-1">
@@ -166,7 +249,7 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />
-                  <span>Continuar como {name.split(" ")[0] || provider}</span>
+                  <span>Entrar como {name.split(" ")[0] || provider}</span>
                 </>
               )}
             </button>
@@ -174,9 +257,10 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
         </form>
 
         <p className="text-[10px] text-center text-neutral-400 mt-4 leading-normal">
-          Ao continuar, o Fluxo Finance receberá a confirmação de autenticação via {isGoogle ? "Google" : "Apple"}.
+          Ao continuar, o Fluxo Finance receberá a confirmação de autenticação via {isGoogle ? "Google OAuth 2.0" : "Apple"}.
         </p>
       </div>
     </div>
   );
 };
+
