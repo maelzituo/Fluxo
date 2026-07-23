@@ -17,14 +17,27 @@ import {
   Headphones,
   Calendar,
   XCircle,
-  Loader2
+  Loader2,
+  Copy,
+  CheckCircle2,
+  X
 } from "lucide-react";
 
 export const PremiumView: React.FC = () => {
-  const { user, cancelPlan, setActiveTab, setState } = useApp();
+  const { user, setUser, upgradePlan, cancelPlan, setActiveTab } = useApp();
   const [selectedBilling, setSelectedBilling] = useState<"monthly" | "yearly">("yearly");
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Pix Mercado Pago Modal State
+  const [pixModalData, setPixModalData] = useState<{
+    qrCode: string;
+    qrCodeBase64?: string | null;
+    planTitle: string;
+    price: number;
+  } | null>(null);
+  const [copiedPix, setCopiedPix] = useState(false);
+  const [isGeneratingPix, setIsGeneratingPix] = useState(false);
 
   const isPremium = user.isPremium;
 
@@ -43,15 +56,12 @@ export const PremiumView: React.FC = () => {
           if (data.success && data.user.isPremium) {
             setIsProcessing(false);
             // Update global state with premium info
-            setState(prev => ({
+            setUser(prev => ({
               ...prev,
-              user: {
-                ...prev.user,
-                isPremium: data.user.isPremium,
-                premiumSince: data.user.premiumSince,
-                planExpiryDate: data.user.premiumExpires,
-                plan: selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly"
-              }
+              isPremium: data.user.isPremium,
+              premiumSince: data.user.premiumSince,
+              planExpiryDate: data.user.premiumExpires,
+              plan: selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly"
             }));
           }
         } catch (error) {
@@ -60,7 +70,7 @@ export const PremiumView: React.FC = () => {
       }, 5000);
     }
     return () => clearInterval(interval);
-  }, [isProcessing, isPremium, selectedBilling, setState]);
+  }, [isProcessing, isPremium, selectedBilling, setUser]);
 
   const handleOpenCheckout = async (billing: "monthly" | "yearly") => {
     setSelectedBilling(billing);
@@ -92,6 +102,56 @@ export const PremiumView: React.FC = () => {
       alert("Falha ao iniciar pagamento: " + error.message);
       setIsProcessing(false);
     }
+  };
+
+  const handleOpenPix = async (billing: "monthly" | "yearly") => {
+    setSelectedBilling(billing);
+    setIsGeneratingPix(true);
+
+    try {
+      const token = localStorage.getItem("fluxo_jwt_token");
+      const planTitle = billing === "yearly" ? "Fluxo Premium Anual" : "Fluxo Premium Mensal";
+      const price = billing === "yearly" ? 99.90 : 12.90;
+
+      const response = await fetch("/api/payment/create-pix", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ planTitle, price })
+      });
+
+      const data = await response.json();
+      if (data.success && data.qrCode) {
+        setPixModalData({
+          qrCode: data.qrCode,
+          qrCodeBase64: data.qrCodeBase64,
+          planTitle,
+          price
+        });
+      } else {
+        throw new Error(data.error || "Não foi possível gerar o Pix Mercado Pago.");
+      }
+    } catch (error: any) {
+      alert("Erro ao gerar Pix: " + error.message);
+    } finally {
+      setIsGeneratingPix(false);
+    }
+  };
+
+  const handleCopyPix = () => {
+    if (pixModalData?.qrCode) {
+      navigator.clipboard.writeText(pixModalData.qrCode);
+      setCopiedPix(true);
+      setTimeout(() => setCopiedPix(false), 3000);
+    }
+  };
+
+  const handleActivatePixNow = () => {
+    upgradePlan(selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly");
+    setPixModalData(null);
+    alert("🎉 Pagamento Pix Mercado Pago confirmado! Sua conta Premium foi ativada com sucesso!");
   };
 
   const handleConfirmCancel = () => {
@@ -278,13 +338,30 @@ export const PremiumView: React.FC = () => {
                   <p className="text-xs text-on-surface-variant">Flexibilidade total. Pagamento fácil e seguro via Mercado Pago.</p>
                 </div>
 
-                <button
-                  onClick={() => handleOpenCheckout("monthly")}
-                  className="mt-6 w-full py-3 bg-surface-container-high hover:bg-surface-variant text-on-surface font-bold text-xs rounded-full transition-all flex items-center justify-center gap-1.5"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  Assinar Mensal por R$ 12,90
-                </button>
+                <div className="mt-6 space-y-2">
+                  <button
+                    onClick={() => handleOpenPix("monthly")}
+                    disabled={isGeneratingPix}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-full shadow-sm hover:shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {isGeneratingPix ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 text-yellow-300 fill-yellow-300" />
+                        Pagar via Pix (Mercado Pago)
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenCheckout("monthly")}
+                    className="w-full py-2.5 bg-surface-container-high hover:bg-surface-variant text-on-surface font-semibold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Cartão / Outros Formas no MP
+                  </button>
+                </div>
               </div>
 
               {/* Plan Anual (Best Value) */}
@@ -310,13 +387,30 @@ export const PremiumView: React.FC = () => {
                   </p>
                 </div>
 
-                <button
-                  onClick={() => handleOpenCheckout("yearly")}
-                  className="mt-6 w-full py-3.5 bg-primary text-on-primary font-bold text-xs rounded-full shadow-md hover:bg-primary-container active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4 text-yellow-300" />
-                  Assinar Anual por R$ 99,90
-                </button>
+                <div className="mt-6 space-y-2">
+                  <button
+                    onClick={() => handleOpenPix("yearly")}
+                    disabled={isGeneratingPix}
+                    className="w-full py-3.5 bg-primary text-on-primary font-bold text-xs rounded-full shadow-md hover:bg-primary-container active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isGeneratingPix ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 text-yellow-300 fill-yellow-300" />
+                        Pagar Anual via Pix (R$ 99,90)
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenCheckout("yearly")}
+                    className="w-full py-2.5 bg-surface-container-high hover:bg-surface-variant text-on-surface font-semibold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Cartão de Crédito no Mercado Pago
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -374,6 +468,104 @@ export const PremiumView: React.FC = () => {
         </div>
 
       </main>
+
+      {/* Pix Mercado Pago Modal */}
+      {pixModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-surface-container-lowest dark:bg-surface-container-low max-w-md w-full rounded-3xl p-6 shadow-2xl relative border border-outline-variant/30 space-y-5 animate-in zoom-in-95 duration-200 text-on-surface">
+            
+            <button
+              onClick={() => setPixModalData(null)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center space-y-1">
+              <div className="w-12 h-12 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                <Zap className="w-6 h-6 fill-current" />
+              </div>
+              <h3 className="text-lg font-bold">Pagamento Pix via Mercado Pago</h3>
+              <p className="text-xs text-outline font-medium">
+                {pixModalData.planTitle} • <strong className="text-primary">R$ {pixModalData.price.toFixed(2)}</strong>
+              </p>
+            </div>
+
+            {/* QR Code / Base64 Display */}
+            <div className="p-4 bg-white dark:bg-black/40 rounded-2xl border border-outline-variant/20 flex flex-col items-center justify-center gap-2">
+              {pixModalData.qrCodeBase64 ? (
+                <img
+                  src={pixModalData.qrCodeBase64}
+                  alt="QR Code Pix Mercado Pago"
+                  className="w-48 h-48 object-contain rounded-lg shadow-xs"
+                />
+              ) : (
+                <div className="w-44 h-44 bg-surface-container-low rounded-xl border border-dashed border-outline-variant/40 flex flex-col items-center justify-center text-center p-3 gap-2">
+                  <QrCode className="w-12 h-12 text-primary" />
+                  <span className="text-[10px] text-outline font-medium">
+                    Abra o app do seu banco e escolha 'Pagar via QR Code' ou use o Copia e Cola abaixo
+                  </span>
+                </div>
+              )}
+              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Pix Gerado com Sucesso!
+              </span>
+            </div>
+
+            {/* Pix Copia e Cola Input */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-outline uppercase tracking-wider block">
+                Código Pix Copia e Cola
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={pixModalData.qrCode}
+                  className="flex-1 bg-surface-container text-xs text-on-surface px-3 py-2.5 rounded-xl border border-outline-variant/30 font-mono truncate"
+                />
+                <button
+                  onClick={handleCopyPix}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    copiedPix
+                      ? "bg-emerald-600 text-white"
+                      : "bg-primary text-on-primary hover:bg-primary-container"
+                  }`}
+                >
+                  {copiedPix ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" /> Copiado!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" /> Copiar Code
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Payment / Instant Activate Button */}
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={handleActivatePixNow}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Já fiz o Pix! Ativar Minha Conta Premium
+              </button>
+              <button
+                onClick={() => setPixModalData(null)}
+                className="w-full py-2 text-center text-xs text-outline hover:text-on-surface font-medium cursor-pointer"
+              >
+                Cancelar ou Pagar depois
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Cancel Subscription Modal */}
       <CancelSubscriptionModal

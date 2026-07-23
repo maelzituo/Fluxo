@@ -442,6 +442,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       user: {
         ...prev.user,
+        isPremium: true,
         plan,
         planExpiryDate: expiry.toISOString().split("T")[0],
         isAutoRenew: true,
@@ -478,6 +479,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       user: {
         ...prev.user,
+        isPremium: false,
         plan: "free",
         isAutoRenew: false,
         cancelledAt: nowISO,

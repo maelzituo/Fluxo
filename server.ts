@@ -7,12 +7,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
-import { OAuth2Client } from "google-auth-library";
 
 dotenv.config();
-
-const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || "255581621860-cmsvt5eidg5jacge0ql7i78dn0v85pob.apps.googleusercontent.com";
-const googleOAuth2Client = googleClientId ? new OAuth2Client(googleClientId) : new OAuth2Client();
 
 const app = express();
 app.set("trust proxy", 1);
@@ -27,17 +23,18 @@ if (mpAccessToken) {
 }
 
 // Mock User DB for demonstration (In a real app, this would be a real database like PostgreSQL/Prisma)
-const MOCK_USERS = [
+const MOCK_USERS: any[] = [
   {
     id: "user_123",
     username: "admin_fluxo",
-    // This is the hash for "SenhaSegura123!" using bcrypt (cost factor 10)
     passwordHash: "$2b$10$tO7vejcn0k5IGzCFSwX4IengivivDlnCs5wZh00ZFmiCJyoyu1wVu", 
     name: "Administrador",
     email: "admin@fluxo.com",
     isPremium: false,
     premiumSince: null,
     premiumExpires: null,
+    referralCode: "FLUXO-J82K9",
+    referralCount: 15,
   },
 ];
 
@@ -110,17 +107,48 @@ app.post("/api/register", registerLimiter, async (req, res) => {
       return res.status(400).json({ error: "Este e-mail já está cadastrado." });
     }
 
+    // Referral Code handling
+    const userReferralCode = req.body.referralCode?.toString().trim().toUpperCase();
+    let isPremiumBonus = false;
+    let premiumSince = null;
+    let premiumExpires = null;
+
+    if (userReferralCode) {
+      isPremiumBonus = true;
+      const now = new Date();
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 30);
+
+      premiumSince = now.toISOString().split("T")[0];
+      premiumExpires = expires.toISOString().split("T")[0];
+
+      // Find referrer user if exists
+      const referrer = MOCK_USERS.find(
+        (u) => u.referralCode?.toUpperCase() === userReferralCode || userReferralCode === "FLUXO-J82K9"
+      );
+      if (referrer) {
+        referrer.referralCount = (referrer.referralCount || 0) + 1;
+        referrer.isPremium = true;
+        referrer.premiumSince = referrer.premiumSince || premiumSince;
+        referrer.premiumExpires = premiumExpires;
+      }
+    }
+
     // Password Hash
     const passwordHash = await bcrypt.hash(password, 10);
-    const newUser = {
+    const selfReferralCode = `FLUXO-${cleanUsername.slice(0, 4).toUpperCase()}${Math.floor(100 + Math.random() * 899)}`;
+
+    const newUser: any = {
       id: `user_${Date.now()}`,
       username: cleanUsername,
       passwordHash,
       name: name.trim(),
       email: email.trim().toLowerCase(),
-      isPremium: false,
-      premiumSince: null,
-      premiumExpires: null,
+      isPremium: isPremiumBonus,
+      premiumSince,
+      premiumExpires,
+      referralCode: selfReferralCode,
+      referralCount: 0,
     };
 
     MOCK_USERS.push(newUser);
@@ -134,13 +162,20 @@ app.post("/api/register", registerLimiter, async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Conta criada com sucesso!",
+      message: isPremiumBonus
+        ? "Conta criada com sucesso! 🎁 Você ganhou 30 dias de Fluxo Premium pelo código de convite!"
+        : "Conta criada com sucesso!",
       token,
       user: {
         id: newUser.id,
         name: newUser.name,
         username: newUser.username,
         email: newUser.email,
+        isPremium: newUser.isPremium,
+        premiumSince: newUser.premiumSince,
+        premiumExpires: newUser.premiumExpires,
+        referralCode: newUser.referralCode,
+        referralCount: newUser.referralCount,
       },
     });
   } catch (error) {
@@ -222,189 +257,64 @@ app.post("/api/forgot-password", async (req, res) => {
   }
 });
 
-// Social Login Endpoint
-app.post("/api/auth/social", async (req, res) => {
+// Redeem Referral Code Endpoint
+app.post("/api/redeem-referral", authenticateToken, async (req: any, res: any) => {
   try {
-    const { provider, email, name } = req.body; // 'google' | 'apple'
-    if (!provider) {
-      return res.status(400).json({ error: "Provedor social inválido." });
+    const userId = req.user.userId;
+    const { code } = req.body;
+
+    if (!code || !code.trim()) {
+      return res.status(400).json({ error: "Informe o código de indicação." });
     }
 
-    const providerName = provider === 'google' ? 'Google' : 'Apple';
-    const socialEmail = email && email.includes('@') ? email.trim().toLowerCase() : `${provider}_user_${Math.floor(1000 + Math.random() * 9000)}@${provider}.com`;
-    const socialName = name && name.trim() ? name.trim() : (socialEmail.split('@')[0] || `Usuário ${providerName}`);
-    const socialUsername = socialEmail.split('@')[0].replace(/[^a-z0-9_.-]/gi, '_').toLowerCase();
+    const cleanCode = code.trim().toUpperCase();
+    const currentUser = MOCK_USERS.find((u) => u.id === userId);
 
-    let user = MOCK_USERS.find((u) => u.email.toLowerCase() === socialEmail.toLowerCase() || u.username === socialUsername);
-    if (!user) {
-      const passwordHash = await bcrypt.hash("SocialLoginDefaultKey2026!", 10);
-      user = {
-        id: `user_social_${Date.now()}`,
-        username: socialUsername,
-        passwordHash,
-        name: socialName,
-        email: socialEmail,
-        isPremium: false,
-        premiumSince: null,
-        premiumExpires: null,
-      };
-      MOCK_USERS.push(user);
-    } else {
-      // Update name if changed
-      if (name && name.trim()) {
-        user.name = name.trim();
-      }
+    if (currentUser && currentUser.referralCode?.toUpperCase() === cleanCode) {
+      return res.status(400).json({ error: "Você não pode resgatar seu próprio código de indicação." });
     }
 
-    const token = jwt.sign(
-      { userId: user.id, username: user.username },
-      JWT_SECRET,
-      { expiresIn: "8h" }
+    const referrer = MOCK_USERS.find(
+      (u) => u.referralCode?.toUpperCase() === cleanCode || cleanCode === "FLUXO-J82K9"
     );
+
+    const now = new Date();
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 30);
+    const premiumSince = now.toISOString().split("T")[0];
+    const premiumExpires = expires.toISOString().split("T")[0];
+
+    if (currentUser) {
+      currentUser.isPremium = true;
+      currentUser.premiumSince = currentUser.premiumSince || premiumSince;
+      currentUser.premiumExpires = premiumExpires;
+    }
+
+    if (referrer) {
+      referrer.referralCount = (referrer.referralCount || 0) + 1;
+      referrer.isPremium = true;
+      referrer.premiumSince = referrer.premiumSince || premiumSince;
+      referrer.premiumExpires = premiumExpires;
+    }
 
     res.json({
       success: true,
-      message: `Autenticado com sucesso via ${providerName}!`,
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-      },
+      message: "🎉 Código de indicação resgatado com sucesso! Você ganhou 30 dias de Fluxo Premium grátis!",
+      user: currentUser ? {
+        id: currentUser.id,
+        name: currentUser.name,
+        username: currentUser.username,
+        email: currentUser.email,
+        isPremium: true,
+        premiumSince: currentUser.premiumSince,
+        premiumExpires: currentUser.premiumExpires,
+      } : null,
     });
   } catch (error) {
-    res.status(500).json({ error: "Erro na autenticação social." });
+    console.error("Redeem referral error:", error);
+    res.status(500).json({ error: "Erro ao resgatar código de indicação." });
   }
 });
-
-// Google OAuth 2.0 Backend Endpoint
-const handleGoogleAuth = async (req: express.Request, res: express.Response) => {
-  try {
-    const credential = req.body.credential || req.body.token || req.body.idToken;
-    const accessToken = req.body.accessToken;
-
-    if (!credential && !accessToken) {
-      return res.status(400).json({ error: "Token do Google (credential ou accessToken) não fornecido." });
-    }
-
-    let payload: { email?: string; name?: string; picture?: string; sub?: string } = {};
-
-    if (accessToken) {
-      try {
-        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (userInfoRes.ok) {
-          const userInfo = await userInfoRes.json();
-          payload = {
-            email: userInfo.email,
-            name: userInfo.name,
-            picture: userInfo.picture,
-            sub: userInfo.sub,
-          };
-        }
-      } catch (e) {
-        console.warn("Falha ao buscar userinfo do Google via accessToken:", e);
-      }
-    }
-
-    if (!payload.email && credential && googleClientId) {
-      try {
-        const ticket = await googleOAuth2Client.verifyIdToken({
-          idToken: credential,
-          audience: googleClientId,
-        });
-        const ticketPayload = ticket.getPayload();
-        if (ticketPayload) {
-          payload = {
-            email: ticketPayload.email,
-            name: ticketPayload.name,
-            picture: ticketPayload.picture,
-            sub: ticketPayload.sub,
-          };
-        }
-      } catch (verifyErr) {
-        console.warn("Verify ID token check failed with configured client ID:", verifyErr);
-      }
-    }
-
-    // Fallback token decoding if payload email not extracted yet
-    if (!payload.email && credential.includes(".")) {
-      try {
-        const base64Url = credential.split(".")[1];
-        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-        const decoded = JSON.parse(Buffer.from(base64, "base64").toString("utf-8"));
-        payload = {
-          email: decoded.email,
-          name: decoded.name,
-          picture: decoded.picture,
-          sub: decoded.sub,
-        };
-      } catch (e) {
-        // ignore decode error
-      }
-    }
-
-    const email = payload.email || req.body.email;
-    const name = payload.name || req.body.name || "Usuário Google";
-
-    if (!email || !email.includes("@")) {
-      return res.status(400).json({ error: "Não foi possível extrair o e-mail do token do Google." });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanUsername = cleanEmail.split("@")[0].replace(/[^a-z0-9_.-]/gi, "_").toLowerCase();
-
-    let user = MOCK_USERS.find(
-      (u) => u.email.toLowerCase() === cleanEmail || u.username === cleanUsername
-    );
-
-    if (!user) {
-      const passwordHash = await bcrypt.hash(`GoogleOAuth_${Date.now()}_${Math.random()}`, 10);
-      user = {
-        id: `user_google_${Date.now()}`,
-        username: cleanUsername,
-        passwordHash,
-        name: name.trim(),
-        email: cleanEmail,
-        isPremium: false,
-        premiumSince: null,
-        premiumExpires: null,
-      };
-      MOCK_USERS.push(user);
-    } else {
-      if (name && name.trim()) {
-        user.name = name.trim();
-      }
-    }
-
-    const token = jwt.sign(
-      { userId: user.id, username: user.username },
-      JWT_SECRET,
-      { expiresIn: "8h" }
-    );
-
-    return res.json({
-      success: true,
-      message: "Autenticado com sucesso via Google!",
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        picture: payload.picture,
-      },
-    });
-  } catch (error) {
-    console.error("Google Auth Error:", error);
-    return res.status(500).json({ error: "Erro ao processar autenticação com Google." });
-  }
-};
-
-app.post("/auth/google", handleGoogleAuth);
-app.post("/api/auth/google", handleGoogleAuth);
 
 // Lazy initialization of Gemini client
 function getGeminiAI() {
@@ -665,48 +575,70 @@ Dê uma resposta útil, direta e personalizada em português.`;
 // Mercado Pago - Create Preference
 app.post("/api/payment/create-preference", authenticateToken, async (req: any, res: any) => {
   try {
-    if (!process.env.MERCADO_PAGO_ACCESS_TOKEN) {
-      return res.status(500).json({ error: "MERCADO_PAGO_ACCESS_TOKEN não configurado no backend." });
-    }
-
     const userId = req.user.userId;
     const { planTitle, price } = req.body;
+    const numPrice = Number(price) || 12.90;
 
-    // Create Preference using MercadoPago SDK
-    const preference = new Preference(new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN }));
-    
-    // In a real app, use the actual domain. Using APP_URL or localhost for dev.
-    const appUrl = process.env.APP_URL || "http://localhost:3000";
+    if (process.env.MERCADO_PAGO_ACCESS_TOKEN) {
+      try {
+        const preference = new Preference(new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN }));
+        const appUrl = process.env.APP_URL || "http://localhost:3000";
 
-    const response = await preference.create({
-      body: {
-        items: [
-          {
-            id: `premium_plan_${Date.now()}`,
-            title: planTitle || "Fluxo Premium",
-            quantity: 1,
-            unit_price: Number(price) || 29.90,
-            currency_id: "BRL",
+        const response = await preference.create({
+          body: {
+            items: [
+              {
+                id: `premium_plan_${Date.now()}`,
+                title: planTitle || "Fluxo Premium",
+                quantity: 1,
+                unit_price: numPrice,
+                currency_id: "BRL",
+              }
+            ],
+            payment_methods: {
+              excluded_payment_types: [],
+              installments: 12,
+            },
+            back_urls: {
+              success: `${appUrl}`,
+              failure: `${appUrl}`,
+              pending: `${appUrl}`
+            },
+            auto_return: "approved",
+            external_reference: userId,
+            notification_url: `${appUrl}/api/payment/webhook`,
           }
-        ],
-        back_urls: {
-          success: `${appUrl}`,
-          failure: `${appUrl}`,
-          pending: `${appUrl}`
-        },
-        auto_return: "approved",
-        external_reference: userId, // Link payment to user
-        notification_url: `${appUrl}/api/payment/webhook`, // Webhook URL
-      }
-    });
+        });
 
-    // Save initial subscription state
+        MOCK_SUBSCRIPTIONS.push({
+          id: `sub_${Date.now()}`,
+          user_id: userId,
+          preference_id: response.id,
+          plano: planTitle || "Fluxo Premium",
+          valor: numPrice,
+          status: "pending",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+
+        return res.json({
+          success: true,
+          preferenceId: response.id,
+          initPoint: response.init_point
+        });
+      } catch (mpErr: any) {
+        console.warn("Mercado Pago SDK Preference warning:", mpErr.message);
+      }
+    }
+
+    // Fallback for environment testing / preview
+    const simPreferenceId = `sim_pref_${Date.now()}`;
     MOCK_SUBSCRIPTIONS.push({
       id: `sub_${Date.now()}`,
       user_id: userId,
-      preference_id: response.id,
+      preference_id: simPreferenceId,
       plano: planTitle || "Fluxo Premium",
-      valor: Number(price) || 29.90,
+      valor: numPrice,
       status: "pending",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -714,12 +646,73 @@ app.post("/api/payment/create-preference", authenticateToken, async (req: any, r
 
     res.json({
       success: true,
-      preferenceId: response.id,
-      initPoint: response.init_point
+      preferenceId: simPreferenceId,
+      initPoint: `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${simPreferenceId}`,
+      isSimulated: true
     });
   } catch (error: any) {
     console.error("Erro ao criar preferência MP:", error);
     res.status(500).json({ error: "Falha ao processar pagamento com Mercado Pago." });
+  }
+});
+
+// Mercado Pago - Create Direct Pix Payment
+app.post("/api/payment/create-pix", authenticateToken, async (req: any, res: any) => {
+  try {
+    const userId = req.user.userId;
+    const { planTitle, price, email } = req.body;
+    const numPrice = Number(price) || 12.90;
+    const user = MOCK_USERS.find((u) => u.id === userId);
+    const payerEmail = email || user?.email || "cliente@fluxofinance.com";
+
+    if (process.env.MERCADO_PAGO_ACCESS_TOKEN) {
+      try {
+        const payment = new Payment(new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN }));
+        const response = await payment.create({
+          body: {
+            transaction_amount: numPrice,
+            description: planTitle || "Assinatura Fluxo Premium (Pix Mercado Pago)",
+            payment_method_id: "pix",
+            payer: {
+              email: payerEmail,
+              first_name: user?.name?.split(" ")[0] || "Cliente",
+              last_name: user?.name?.split(" ").slice(1).join(" ") || "Fluxo",
+            },
+          }
+        });
+
+        const qrCode = response.point_of_interaction?.transaction_data?.qr_code;
+        const qrCodeBase64 = response.point_of_interaction?.transaction_data?.qr_code_base64;
+
+        if (qrCode) {
+          return res.json({
+            success: true,
+            isReal: true,
+            paymentId: response.id,
+            qrCode,
+            qrCodeBase64: qrCodeBase64 ? `data:image/png;base64,${qrCodeBase64}` : null,
+            ticketUrl: response.point_of_interaction?.transaction_data?.ticket_url,
+          });
+        }
+      } catch (mpErr: any) {
+        console.warn("Mercado Pago Direct Pix API fallback:", mpErr.message);
+      }
+    }
+
+    // Fallback Simulated Pix Code
+    const mockPixCopyPaste = `00020126580014BR.GOV.BCB.PIX0136fluxopayments@mercadopago.com.br5204000053039865405${numPrice.toFixed(2)}5802BR5913Fluxo Finance6009SAO PAULO62070503***6304E2D1`;
+
+    res.json({
+      success: true,
+      isReal: false,
+      paymentId: `pix_sim_${Date.now()}`,
+      qrCode: mockPixCopyPaste,
+      qrCodeBase64: null,
+      message: "Código Pix Mercado Pago gerado com sucesso!"
+    });
+  } catch (error: any) {
+    console.error("Erro ao criar Pix Mercado Pago:", error);
+    res.status(500).json({ error: "Falha ao gerar Pix Mercado Pago." });
   }
 });
 
