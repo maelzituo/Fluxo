@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="fluxo-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+    <linearGradient id="fluxo-wave" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#ecfdf5" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="fluxo-accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#818cf8" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#022c22" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  
+  <!-- Rounded Base Container -->
+  <rect width="512" height="512" rx="128" fill="url(#fluxo-bg)" />
+  
+  <!-- Inner Subtle Accent Circle Glow -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="8" />
+
+  <!-- Flowing Financial Wave Line (Growth & Balance) -->
+  <g filter="url(#shadow)">
+    <!-- Stylized 'F' + Dynamic Growth Stream -->
+    <path d="M 140 150 
+             C 140 135, 152 123, 167 123 
+             L 340 123 
+             C 355 123, 365 137, 360 151 
+             L 348 185 
+             C 344 196, 333 203, 321 203 
+             L 215 203 
+             L 200 245 
+             L 300 245 
+             C 315 245, 325 259, 320 273 
+             L 310 302 
+             C 305 314, 294 321, 282 321 
+             L 173 321 
+             L 130 400 
+             C 123 413, 105 408, 107 393 
+             L 140 150 Z" 
+          fill="url(#fluxo-wave)" />
+
+    <!-- Dynamic Pulse Spark / Trend Arrow -->
+    <path d="M 280 180 
+             Q 340 180, 380 130 
+             T 420 80" 
+          fill="none" 
+          stroke="url(#fluxo-accent)" 
+          stroke-width="28" 
+          stroke-linecap="round" />
+          
+    <polygon points="425,65 435,100 395,90" fill="#38bdf8" />
+  </g>
+</svg>
