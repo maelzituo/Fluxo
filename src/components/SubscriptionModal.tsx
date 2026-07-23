@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Repeat, DollarSign, Calendar, Tag, ShieldCheck, Check, Tv, Music, Dumbbell, Zap, Film, Sparkles, CreditCard, Globe, Trash2 } from "lucide-react";
 import { Subscription } from "../types";
+import { ConfirmModal } from "./ConfirmModal";
 
 interface Props {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export const SubscriptionModal: React.FC<Props> = ({
   const [autoPay, setAutoPay] = useState(true);
   const [icon, setIcon] = useState("Tv");
   const [status, setStatus] = useState<"active" | "paused">("active");
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (subscriptionToEdit) {
@@ -59,6 +61,7 @@ export const SubscriptionModal: React.FC<Props> = ({
       setIcon("Tv");
       setStatus("active");
     }
+    setIsDeleteConfirmOpen(false);
   }, [subscriptionToEdit, isOpen]);
 
   if (!isOpen) return null;
@@ -88,12 +91,11 @@ export const SubscriptionModal: React.FC<Props> = ({
     onClose();
   };
 
-  const handleDelete = () => {
+  const handleConfirmDelete = () => {
     if (subscriptionToEdit && onDelete) {
-      if (window.confirm(`Tem certeza que deseja excluir a assinatura "${subscriptionToEdit.title}"?`)) {
-        onDelete(subscriptionToEdit.id);
-        onClose();
-      }
+      onDelete(subscriptionToEdit.id);
+      setIsDeleteConfirmOpen(false);
+      onClose();
     }
   };
 
@@ -293,7 +295,7 @@ export const SubscriptionModal: React.FC<Props> = ({
             {subscriptionToEdit && onDelete && (
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => setIsDeleteConfirmOpen(true)}
                 className="p-3.5 bg-error-container/40 hover:bg-error-container text-error rounded-2xl transition-all cursor-pointer shrink-0"
                 title="Excluir Assinatura"
               >
@@ -310,6 +312,18 @@ export const SubscriptionModal: React.FC<Props> = ({
           </div>
         </form>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        title="Excluir Assinatura"
+        message={`Tem certeza que deseja excluir a assinatura "${subscriptionToEdit?.title}"?`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setIsDeleteConfirmOpen(false)}
+      />
     </div>
   );
 };

@@ -6,6 +6,7 @@ interface ConfirmModalProps {
   message: string;
   confirmText?: string;
   cancelText?: string;
+  isDanger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -16,6 +17,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   message,
   confirmText = "Confirmar",
   cancelText = "Cancelar",
+  isDanger = false,
   onConfirm,
   onCancel,
 }) => {
@@ -29,7 +31,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         <div className="flex gap-3 w-full">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 rounded-xl font-bold text-sm bg-surface text-on-surface border border-outline-variant hover:bg-surface-variant transition-colors"
+            className="flex-1 py-3 rounded-xl font-bold text-sm bg-surface text-on-surface border border-outline-variant hover:bg-surface-variant transition-colors cursor-pointer"
           >
             {cancelText}
           </button>
@@ -38,7 +40,11 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               onConfirm();
               onCancel();
             }}
-            className="flex-1 py-3 rounded-xl font-bold text-sm bg-primary text-on-primary hover:bg-primary/90 transition-colors"
+            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-colors cursor-pointer ${
+              isDanger
+                ? "bg-error text-on-error hover:bg-error/90"
+                : "bg-primary text-on-primary hover:bg-primary/90"
+            }`}
           >
             {confirmText}
           </button>

@@ -3,6 +3,7 @@ import { CreditCard, Calendar, Repeat, ShieldAlert, ArrowRight, CheckCircle2, Pl
 import { Subscription } from "../../types";
 import { useApp } from "../../context/AppContext";
 import { SubscriptionModal } from "../SubscriptionModal";
+import { ConfirmModal } from "../ConfirmModal";
 
 interface Props {
   subscriptions: Subscription[];
@@ -28,6 +29,7 @@ export const SubscriptionsTrackerCard: React.FC<Props> = ({
   const [filter, setFilter] = useState<"all" | "active" | "paused">("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
+  const [subToDelete, setSubToDelete] = useState<Subscription | null>(null);
 
   const activeSubs = subscriptions.filter((s) => s.status === "active");
   const pausedSubs = subscriptions.filter((s) => s.status === "paused");
@@ -207,11 +209,7 @@ export const SubscriptionsTrackerCard: React.FC<Props> = ({
                     </button>
 
                     <button
-                      onClick={() => {
-                        if (window.confirm(`Excluir a assinatura "${sub.title}"?`)) {
-                          deleteSubscription(sub.id);
-                        }
-                      }}
+                      onClick={() => setSubToDelete(sub)}
                       className="p-2 rounded-lg hover:bg-error-container/40 text-outline hover:text-error transition-all cursor-pointer"
                       title="Excluir Assinatura"
                     >
@@ -233,6 +231,23 @@ export const SubscriptionsTrackerCard: React.FC<Props> = ({
         onSave={addSubscription}
         onUpdate={editSubscription}
         onDelete={deleteSubscription}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!subToDelete}
+        title="Excluir Assinatura"
+        message={`Tem certeza que deseja excluir a assinatura "${subToDelete?.title}"?`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        isDanger={true}
+        onConfirm={() => {
+          if (subToDelete) {
+            deleteSubscription(subToDelete.id);
+            setSubToDelete(null);
+          }
+        }}
+        onCancel={() => setSubToDelete(null)}
       />
     </div>
   );

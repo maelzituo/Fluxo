@@ -173,28 +173,28 @@ export const TransactionsView: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <div className="flex gap-1 p-1 bg-surface-container rounded-xl text-xs">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="flex bg-surface-container p-1 rounded-xl text-xs w-full sm:w-auto">
               <button
                 onClick={() => setTypeFilter("all")}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
-                  typeFilter === "all" ? "bg-surface-container-lowest text-primary shadow-xs" : "text-outline"
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg font-bold transition-all text-center cursor-pointer ${
+                  typeFilter === "all" ? "bg-surface-container-lowest text-primary shadow-xs" : "text-outline hover:text-on-surface"
                 }`}
               >
                 Tudo
               </button>
               <button
                 onClick={() => setTypeFilter("income")}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
-                  typeFilter === "income" ? "bg-primary text-on-primary shadow-xs" : "text-outline"
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg font-bold transition-all text-center cursor-pointer ${
+                  typeFilter === "income" ? "bg-primary text-on-primary shadow-xs" : "text-outline hover:text-on-surface"
                 }`}
               >
                 Receitas
               </button>
               <button
                 onClick={() => setTypeFilter("expense")}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
-                  typeFilter === "expense" ? "bg-error text-on-error shadow-xs" : "text-outline"
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg font-bold transition-all text-center cursor-pointer ${
+                  typeFilter === "expense" ? "bg-error text-on-error shadow-xs" : "text-outline hover:text-on-surface"
                 }`}
               >
                 Despesas
@@ -204,7 +204,7 @@ export const TransactionsView: React.FC = () => {
             <select
               value={selectedCatId}
               onChange={(e) => setSelectedCatId(e.target.value)}
-              className="px-3 py-1.5 text-xs font-semibold bg-surface-container border border-outline-variant/30 rounded-xl focus:outline-none"
+              className="w-full sm:w-auto px-3.5 py-2 text-xs font-bold bg-surface-container border border-outline-variant/30 rounded-xl focus:outline-none text-on-surface cursor-pointer"
             >
               <option value="all">Todas as Categorias</option>
               {categories.map((c) => (
