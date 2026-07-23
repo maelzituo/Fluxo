@@ -25,23 +25,36 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const safePost = async (url: string, body: any) => {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const text = await response.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`Erro na resposta do servidor (${response.status}). Tente a confirmação manual abaixo.`);
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || "Erro ao processar autenticação no servidor.");
+    }
+
+    return data;
+  };
+
   const handlePopupGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setError(null);
       setIsLoading(true);
       try {
-        const response = await fetch("/auth/google", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            accessToken: tokenResponse.access_token,
-          }),
+        const data = await safePost("/api/auth/google", {
+          accessToken: tokenResponse.access_token,
         });
-
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Erro na verificação do token do Google.");
-        }
         onSuccess(data.token, data.user);
       } catch (err: any) {
         setError(err.message || "Falha na autenticação via Google.");
@@ -50,7 +63,7 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
       }
     },
     onError: () => {
-      setError("Não foi possível autenticar. Certifique-se de autorizar a origem no Google Cloud Console.");
+      setError("Não foi possível autenticar via pop-up. Certifique-se de autorizar a origem no Google Cloud Console.");
     },
   });
 
@@ -59,19 +72,9 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
     setIsLoading(true);
 
     try {
-      const response = await fetch("/auth/google", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          credential: credentialResponse.credential,
-        }),
+      const data = await safePost("/api/auth/google", {
+        credential: credentialResponse.credential,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Erro na verificação do token do Google.");
-      }
 
       onSuccess(data.token, data.user);
     } catch (err: any) {
@@ -93,25 +96,16 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/social", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider,
-          email: email.trim().toLowerCase(),
-          name: name.trim() || undefined,
-        }),
+      const data = await safePost("/api/auth/social", {
+        provider,
+        email: email.trim().toLowerCase(),
+        name: name.trim() || undefined,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `Erro na autenticação social.`);
-      }
 
       onSuccess(data.token, data.user);
     } catch (err: any) {
       setError(err.message || "Falha ao conectar.");
+    } finally {
       setIsLoading(false);
     }
   };
