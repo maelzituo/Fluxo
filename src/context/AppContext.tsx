@@ -66,6 +66,12 @@ interface AppContextType {
   addCategory: (cat: Omit<Category, "id" | "uuid" | "createdAt" | "updatedAt" | "ownerId">) => void;
   updateBudget: (categoryId: string, monthlyLimit: number) => void;
 
+  // Subscriptions
+  addSubscription: (sub: Omit<Subscription, "id" | "uuid">) => void;
+  editSubscription: (id: string, updated: Partial<Subscription>) => void;
+  deleteSubscription: (id: string) => void;
+  toggleSubscriptionStatus: (id: string) => void;
+
   markAllNotificationsRead: () => void;
   markNotificationRead: (id: string) => void;
   addNotification: (notif: Omit<NotificationItem, "id" | "uuid" | "createdAt" | "updatedAt" | "ownerId">) => void;
@@ -384,6 +390,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const addSubscription = (subData: Omit<Subscription, "id" | "uuid">) => {
+    const id = `sub_${Date.now()}`;
+    const uuid = `sub-uuid-${Date.now()}`;
+    const newSub: Subscription = {
+      ...subData,
+      id,
+      uuid,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      subscriptions: [newSub, ...prev.subscriptions],
+    }));
+  };
+
+  const editSubscription = (id: string, updated: Partial<Subscription>) => {
+    setState((prev) => ({
+      ...prev,
+      subscriptions: prev.subscriptions.map((s) => (s.id === id ? { ...s, ...updated } : s)),
+    }));
+  };
+
+  const deleteSubscription = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      subscriptions: prev.subscriptions.filter((s) => s.id !== id),
+    }));
+  };
+
+  const toggleSubscriptionStatus = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      subscriptions: prev.subscriptions.map((s) =>
+        s.id === id ? { ...s, status: s.status === "active" ? "paused" : "active" } : s
+      ),
+    }));
+  };
+
   const markAllNotificationsRead = () => {
     setState((prev) => ({
       ...prev,
@@ -572,6 +616,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteGoal,
         addCategory,
         updateBudget,
+        addSubscription,
+        editSubscription,
+        deleteSubscription,
+        toggleSubscriptionStatus,
         markAllNotificationsRead,
         markNotificationRead,
         addNotification,
