@@ -13,13 +13,16 @@ import {
   Home as HomeIcon, 
   Shield, 
   Trash2, 
-  Sparkles 
+  Sparkles,
+  AlertTriangle,
+  X 
 } from "lucide-react";
 
 export const GoalsView: React.FC = () => {
   const { goals, deleteGoal } = useApp();
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   const [selectedGoalForDeposit, setSelectedGoalForDeposit] = useState<Goal | null>(null);
+  const [goalToDelete, setGoalToDelete] = useState<Goal | null>(null);
 
   const getGoalIcon = (iconName: string) => {
     switch (iconName) {
@@ -124,11 +127,11 @@ export const GoalsView: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={() => deleteGoal(g.id)}
-                      className="p-1.5 text-outline hover:text-error opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => setGoalToDelete(g)}
+                      className="p-2 sm:p-1.5 text-error sm:text-outline hover:text-error hover:bg-error-container/20 rounded-xl transition-all active:scale-90 flex items-center justify-center shrink-0"
                       title="Excluir Meta"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 stroke-[2]" />
                     </button>
                   </div>
                 </div>
@@ -170,6 +173,56 @@ export const GoalsView: React.FC = () => {
         onClose={() => setIsGoalModalOpen(false)}
         depositGoal={selectedGoalForDeposit}
       />
+
+      {/* Delete Goal Confirmation Modal */}
+      {goalToDelete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-surface dark:bg-inverse-surface w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 border border-outline-variant/20 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-error font-bold">
+                <div className="p-2 bg-error-container/40 rounded-xl">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-extrabold text-on-surface">Excluir Meta</h3>
+              </div>
+              <button
+                onClick={() => setGoalToDelete(null)}
+                className="p-2 text-outline hover:text-on-surface rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              Tem certeza que deseja excluir a meta{" "}
+              <strong className="text-on-surface">"{goalToDelete.title}"</strong> com progresso de{" "}
+              <strong className="text-primary font-mono">
+                R$ {goalToDelete.currentAmount.toLocaleString("pt-BR")} / R$ {goalToDelete.targetAmount.toLocaleString("pt-BR")}
+              </strong>
+              ?
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setGoalToDelete(null)}
+                className="flex-1 py-3 bg-surface-container-high hover:bg-surface-variant text-on-surface font-bold text-xs rounded-2xl transition-all active:scale-95"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  deleteGoal(goalToDelete.id);
+                  setGoalToDelete(null);
+                }}
+                className="flex-1 py-3 bg-error text-on-error font-bold text-xs rounded-2xl shadow-xs hover:bg-error-container hover:text-on-error-container transition-all flex items-center justify-center gap-2 active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

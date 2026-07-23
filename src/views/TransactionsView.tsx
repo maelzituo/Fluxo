@@ -3,7 +3,7 @@ import { useApp } from "../context/AppContext";
 import { Header } from "../components/Header";
 import { exportTransactionsToPDF } from "../lib/pdfExport";
 import { exportTransactionsToCSV, parseCSVToTransactions } from "../lib/csvExport";
-import { TransactionType } from "../types";
+import { Transaction, TransactionType } from "../types";
 import { 
   Search, 
   Download, 
@@ -15,7 +15,9 @@ import {
   Filter, 
   Calendar,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  AlertTriangle,
+  X
 } from "lucide-react";
 
 export const TransactionsView: React.FC = () => {
@@ -33,6 +35,7 @@ export const TransactionsView: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<"all" | TransactionType>("all");
   const [selectedCatId, setSelectedCatId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [txToDelete, setTxToDelete] = useState<Transaction | null>(null);
 
   // Filtering
   const filteredTxs = transactions.filter((t) => {
@@ -260,11 +263,11 @@ export const TransactionsView: React.FC = () => {
                       </div>
 
                       <button
-                        onClick={() => deleteTransaction(tx.id)}
-                        className="p-1.5 text-outline hover:text-error opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => setTxToDelete(tx)}
+                        className="p-2 sm:p-1.5 text-error sm:text-outline hover:text-error hover:bg-error-container/20 rounded-xl transition-all active:scale-90 flex items-center justify-center shrink-0"
                         title="Excluir Lançamento"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4 stroke-[2]" />
                       </button>
                     </div>
                   </div>
@@ -274,6 +277,56 @@ export const TransactionsView: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Delete Confirmation Modal for Mobile/Desktop */}
+      {txToDelete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-surface dark:bg-inverse-surface w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 border border-outline-variant/20 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-error font-bold">
+                <div className="p-2 bg-error-container/40 rounded-xl">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-extrabold text-on-surface">Excluir Transação</h3>
+              </div>
+              <button
+                onClick={() => setTxToDelete(null)}
+                className="p-2 text-outline hover:text-on-surface rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              Tem certeza que deseja remover o lançamento{" "}
+              <strong className="text-on-surface">"{txToDelete.title}"</strong> no valor de{" "}
+              <strong className="text-error font-mono">
+                R$ {txToDelete.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </strong>
+              ? O saldo da conta será recalculado automaticamente.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setTxToDelete(null)}
+                className="flex-1 py-3 bg-surface-container-high hover:bg-surface-variant text-on-surface font-bold text-xs rounded-2xl transition-all active:scale-95"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  deleteTransaction(txToDelete.id);
+                  setTxToDelete(null);
+                }}
+                className="flex-1 py-3 bg-error text-on-error font-bold text-xs rounded-2xl shadow-xs hover:bg-error-container hover:text-on-error-container transition-all flex items-center justify-center gap-2 active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

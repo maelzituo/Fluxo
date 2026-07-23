@@ -10,11 +10,18 @@ import {
   Info, 
   CreditCard, 
   ShieldCheck, 
-  Rocket 
+  Rocket,
+  Trash2
 } from "lucide-react";
 
 export const NotificationsView: React.FC = () => {
-  const { notifications, markAllNotificationsRead, setActiveTab } = useApp();
+  const { 
+    notifications, 
+    markAllNotificationsRead, 
+    deleteNotification,
+    clearAllNotifications,
+    setActiveTab 
+  } = useApp();
 
   const smartInsights = notifications.filter((n) => n.dateGroup === "smart_insight");
   const todayNotifications = notifications.filter((n) => n.dateGroup === "today");
@@ -27,12 +34,26 @@ export const NotificationsView: React.FC = () => {
         showBackBtn={true}
         onBackClick={() => setActiveTab("dashboard")}
         rightAction={
-          <button
-            onClick={markAllNotificationsRead}
-            className="text-xs font-semibold text-primary px-3 py-1.5 hover:bg-secondary-container/20 rounded-full transition-all active:scale-95"
-          >
-            Marcar todas como lidas
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={markAllNotificationsRead}
+              className="text-[11px] font-bold text-primary px-2.5 py-1.5 hover:bg-primary-container/20 rounded-full transition-all active:scale-95"
+            >
+              Marcar lidas
+            </button>
+            <button
+              onClick={() => {
+                if (confirm("Deseja apagar todas as notificações?")) {
+                  clearAllNotifications();
+                }
+              }}
+              className="text-[11px] font-bold text-error px-2.5 py-1.5 hover:bg-error-container/20 rounded-full transition-all active:scale-95 flex items-center gap-1"
+              title="Limpar todas as notificações"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Limpar
+            </button>
+          </div>
         }
       />
 

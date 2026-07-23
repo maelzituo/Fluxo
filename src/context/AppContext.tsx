@@ -63,6 +63,8 @@ interface AppContextType {
 
   markAllNotificationsRead: () => void;
   addNotification: (notif: Omit<NotificationItem, "id" | "uuid" | "createdAt" | "updatedAt" | "ownerId">) => void;
+  deleteNotification: (id: string) => void;
+  clearAllNotifications: () => void;
 
   upgradePlan: (plan: "premium_monthly" | "premium_yearly") => void;
   cancelPlan: () => void;
@@ -173,10 +175,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTransaction = (id: string) => {
-    setState((prev) => ({
-      ...prev,
-      transactions: prev.transactions.filter((t) => t.id !== id),
-    }));
+    const now = new Date().toISOString();
+    setState((prev) => {
+      const txToDelete = prev.transactions.find((t) => t.id === id);
+      if (!txToDelete) return prev;
+
+      // Reverse account balance impact
+      const updatedAccounts = prev.accounts.map((acc) => {
+        if (acc.id === txToDelete.accountId) {
+          const delta = txToDelete.type === "expense" ? txToDelete.amount : -txToDelete.amount;
+          return { ...acc, balance: acc.balance + delta, updatedAt: now };
+        }
+        return acc;
+      });
+
+      // Reverse category spent budget if expense
+      const updatedBudgets = prev.budgets.map((b) => {
+        if (b.categoryId === txToDelete.categoryId && txToDelete.type === "expense") {
+          return { ...b, currentSpent: Math.max(0, b.currentSpent - txToDelete.amount), updatedAt: now };
+        }
+        return b;
+      });
+
+      return {
+        ...prev,
+        transactions: prev.transactions.filter((t) => t.id !== id),
+        accounts: updatedAccounts,
+        budgets: updatedBudgets,
+      };
+    });
   };
 
   const importTransactions = (imported: Partial<Transaction>[]) => {
@@ -337,6 +364,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const deleteNotification = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      notifications: prev.notifications.filter((n) => n.id !== id),
+    }));
+  };
+
+  const clearAllNotifications = () => {
+    setState((prev) => ({
+      ...prev,
+      notifications: [],
+    }));
+  };
+
   const addNotification = (notifData: Omit<NotificationItem, "id" | "uuid" | "createdAt" | "updatedAt" | "ownerId">) => {
     const now = new Date().toISOString();
     const newNotif: NotificationItem = {
@@ -494,6 +535,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateBudget,
         markAllNotificationsRead,
         addNotification,
+        deleteNotification,
+        clearAllNotifications,
         upgradePlan,
         cancelPlan,
         reactivatePlan,

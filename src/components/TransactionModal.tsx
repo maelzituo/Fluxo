@@ -120,8 +120,8 @@ export const TransactionModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-background/40 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-lg bg-surface dark:bg-inverse-surface rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-on-background/50 backdrop-blur-sm animate-fadeIn">
+      <div className="w-full max-w-lg bg-surface dark:bg-inverse-surface rounded-t-3xl sm:rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-outline-variant/10 flex items-center justify-between bg-surface-container-low dark:bg-surface-container-high/10">
           <h2 className="text-lg font-bold text-on-surface dark:text-inverse-on-surface">

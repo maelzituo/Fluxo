@@ -73,8 +73,8 @@ export const GoalModal: React.FC<GoalModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-background/40 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-md bg-surface dark:bg-inverse-surface rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-on-background/50 backdrop-blur-sm animate-fadeIn">
+      <div className="w-full max-w-md bg-surface dark:bg-inverse-surface rounded-t-3xl sm:rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-outline-variant/10 flex items-center justify-between bg-surface-container-low dark:bg-surface-container-high/10">
           <h2 className="text-lg font-bold text-on-surface dark:text-inverse-on-surface flex items-center gap-2">
@@ -91,7 +91,7 @@ export const GoalModal: React.FC<GoalModalProps> = ({
 
         {depositGoal ? (
           /* Deposit Form */
-          <form onSubmit={handleDepositSubmit} className="p-6 space-y-4">
+          <form onSubmit={handleDepositSubmit} className="p-6 space-y-4 overflow-y-auto">
             <div className="p-3 bg-secondary-container/30 border border-secondary-container rounded-xl text-xs text-on-secondary-container">
               <p className="font-semibold">Progresso Atual:</p>
               <p>
@@ -134,7 +134,7 @@ export const GoalModal: React.FC<GoalModalProps> = ({
           </form>
         ) : (
           /* Create Goal Form */
-          <form onSubmit={handleCreateSubmit} className="p-6 space-y-4">
+          <form onSubmit={handleCreateSubmit} className="p-6 space-y-4 overflow-y-auto">
             <div>
               <label className="block text-xs font-semibold uppercase text-outline mb-1">
                 Título da Meta *

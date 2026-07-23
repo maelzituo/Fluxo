@@ -173,8 +173,8 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
-      <div className="bg-surface dark:bg-inverse-surface/90 text-on-surface w-full max-w-lg rounded-3xl border border-outline-variant/20 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
+      <div className="bg-surface dark:bg-inverse-surface/90 text-on-surface w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-outline-variant/20 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Header with Security Badge */}
         <div className="bg-gradient-to-r from-primary to-emerald-700 text-on-primary p-5 flex items-center justify-between shrink-0">
