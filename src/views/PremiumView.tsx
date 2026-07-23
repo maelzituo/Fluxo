@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import { Header } from "../components/Header";
-import { PaymentCheckoutModal } from "../components/PaymentCheckoutModal";
 import { CancelSubscriptionModal } from "../components/CancelSubscriptionModal";
 import { 
   Crown, 
@@ -10,36 +9,89 @@ import {
   Zap, 
   ShieldCheck, 
   CreditCard, 
-  ArrowRight,
   Bot,
   FileSpreadsheet,
-  FileText,
+  QrCode,
+  BarChart3,
   Lock,
   Headphones,
   Calendar,
-  AlertCircle,
-  RefreshCw,
   XCircle,
-  BarChart3,
-  QrCode
+  Loader2
 } from "lucide-react";
 
 export const PremiumView: React.FC = () => {
-  const { user, upgradePlan, cancelPlan, reactivatePlan, setActiveTab } = useApp();
+  const { user, cancelPlan, setActiveTab, setState } = useApp();
   const [selectedBilling, setSelectedBilling] = useState<"monthly" | "yearly">("yearly");
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const isPremium = user.plan === "premium_monthly" || user.plan === "premium_yearly";
+  const isPremium = user.isPremium;
 
-  const handleOpenCheckout = (billing: "monthly" | "yearly") => {
+  // Poll for premium status if we are waiting for payment
+  useEffect(() => {
+    let interval: any;
+    if (isProcessing && !isPremium) {
+      interval = setInterval(async () => {
+        try {
+          const token = localStorage.getItem("fluxo_jwt_token");
+          if (!token) return;
+          const response = await fetch("/api/user/me", {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          const data = await response.json();
+          if (data.success && data.user.isPremium) {
+            setIsProcessing(false);
+            // Update global state with premium info
+            setState(prev => ({
+              ...prev,
+              user: {
+                ...prev.user,
+                isPremium: data.user.isPremium,
+                premiumSince: data.user.premiumSince,
+                planExpiryDate: data.user.premiumExpires,
+                plan: selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly"
+              }
+            }));
+          }
+        } catch (error) {
+          console.error("Erro ao verificar status de usuário:", error);
+        }
+      }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [isProcessing, isPremium, selectedBilling, setState]);
+
+  const handleOpenCheckout = async (billing: "monthly" | "yearly") => {
     setSelectedBilling(billing);
-    setIsCheckoutOpen(true);
-  };
+    setIsProcessing(true);
 
-  const handlePaymentSuccess = () => {
-    upgradePlan(selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly");
-    setIsCheckoutOpen(false);
+    try {
+      const token = localStorage.getItem("fluxo_jwt_token");
+      const planTitle = billing === "yearly" ? "Fluxo Premium Anual" : "Fluxo Premium Mensal";
+      const price = billing === "yearly" ? 99.90 : 12.90;
+
+      const response = await fetch("/api/payment/create-preference", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ planTitle, price })
+      });
+
+      const data = await response.json();
+      
+      if (data.success && data.initPoint) {
+        // Open Mercado Pago checkout in a new tab
+        window.open(data.initPoint, "_blank");
+      } else {
+        throw new Error(data.error || "Erro ao gerar pagamento.");
+      }
+    } catch (error: any) {
+      alert("Falha ao iniciar pagamento: " + error.message);
+      setIsProcessing(false);
+    }
   };
 
   const handleConfirmCancel = () => {
@@ -47,7 +99,6 @@ export const PremiumView: React.FC = () => {
     setIsCancelModalOpen(false);
   };
 
-  // Detailed Premium Features Highlight List
   const featureHighlights = [
     {
       icon: <Bot className="w-6 h-6 text-emerald-500" />,
@@ -125,6 +176,17 @@ export const PremiumView: React.FC = () => {
           </div>
         </div>
 
+        {/* Processing State */}
+        {isProcessing && !isPremium && (
+          <div className="p-8 bg-surface-container-lowest rounded-3xl border border-primary text-center space-y-4 shadow-lg animate-pulse">
+            <Loader2 className="w-10 h-10 text-primary mx-auto animate-spin" />
+            <h3 className="text-lg font-bold text-on-surface">Pagamento em processamento</h3>
+            <p className="text-sm text-outline">
+              Abra a aba do Mercado Pago para concluir o pagamento. Esta tela será atualizada automaticamente quando o pagamento for aprovado.
+            </p>
+          </div>
+        )}
+
         {/* ACTIVE PREMIUM SUBSCRIPTION STATUS & MANAGEMENT CARD */}
         {isPremium ? (
           <div className="p-6 bg-surface-container-lowest dark:bg-inverse-surface/40 rounded-3xl border border-primary/40 shadow-md space-y-4">
@@ -169,7 +231,7 @@ export const PremiumView: React.FC = () => {
               </div>
             </div>
           </div>
-        ) : (
+        ) : !isProcessing ? (
           /* BILLING SELECTOR & PRICING CARDS FOR FREE USERS */
           <div className="space-y-6">
             
@@ -213,7 +275,7 @@ export const PremiumView: React.FC = () => {
                     <span className="text-3xl font-extrabold text-on-surface">R$ 12,90</span>
                     <span className="text-xs text-outline font-medium"> /mês</span>
                   </div>
-                  <p className="text-xs text-on-surface-variant">Flexibilidade total. Pagamento fácil via Pix ou Cartão.</p>
+                  <p className="text-xs text-on-surface-variant">Flexibilidade total. Pagamento fácil e seguro via Mercado Pago.</p>
                 </div>
 
                 <button
@@ -258,7 +320,7 @@ export const PremiumView: React.FC = () => {
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* DETAILED PREMIUM FEATURE HIGHLIGHT CARDS */}
         <div className="space-y-4">
@@ -305,21 +367,13 @@ export const PremiumView: React.FC = () => {
           </div>
 
           <div className="pt-3 border-t border-outline-variant/10 flex flex-wrap justify-between items-center text-[10px] text-outline font-semibold gap-2">
-            <span>🔒 Pagamento Criptografado SSL 256-Bit</span>
+            <span>🔒 Pagamento Seguro via Mercado Pago</span>
             <span>🛡️ Padrão PCI-DSS Nível 1</span>
             <span>⚡ Suporte a Pix e Cartão</span>
           </div>
         </div>
 
       </main>
-
-      {/* Payment Checkout Modal */}
-      <PaymentCheckoutModal
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
-        planType={selectedBilling}
-        onSuccessPayment={handlePaymentSuccess}
-      />
 
       {/* Cancel Subscription Modal */}
       <CancelSubscriptionModal
@@ -331,3 +385,4 @@ export const PremiumView: React.FC = () => {
     </div>
   );
 };
+

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Header } from "../components/Header";
 import { AvatarPickerModal } from "../components/AvatarPickerModal";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { 
   User, 
   Mail, 
@@ -19,7 +20,8 @@ import {
   FileJson,
   Camera,
   QrCode,
-  ShieldAlert
+  ShieldAlert,
+  LogOut
 } from "lucide-react";
 
 export const ProfileView: React.FC = () => {
@@ -31,6 +33,7 @@ export const ProfileView: React.FC = () => {
     restoreState,
     resetToDefaults,
     openSecurityModal,
+    logout
   } = useApp();
 
   const [name, setName] = useState(user.name);
@@ -38,6 +41,7 @@ export const ProfileView: React.FC = () => {
   const [pinInput, setPinInput] = useState(user.pinCode || "");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{isOpen: boolean; type: "logout" | "reset" | null}>({isOpen: false, type: null});
 
   const isPremium = user.plan !== "free";
 
@@ -283,41 +287,6 @@ export const ProfileView: React.FC = () => {
           </div>
         </section>
 
-        {/* Nubank Pix Destination Info */}
-        <section className="bg-surface-container-lowest dark:bg-inverse-surface/40 rounded-3xl p-6 border border-purple-500/20 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 bg-purple-600 text-white font-black text-xs rounded-2xl flex items-center justify-center shadow-xs">
-                NU
-              </div>
-              <div>
-                <h3 className="text-sm font-extrabold text-on-surface">Conta de Recebimento do App</h3>
-                <p className="text-[11px] text-outline">
-                  Pagamentos de assinaturas direcionados automaticamente
-                </p>
-              </div>
-            </div>
-
-            <span className="text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400 font-extrabold px-2.5 py-1 rounded-full uppercase flex items-center gap-1 border border-purple-500/20">
-              <Lock className="w-3 h-3" /> Chave Protegida
-            </span>
-          </div>
-
-          <div className="p-4 bg-purple-500/5 dark:bg-purple-500/10 rounded-2xl border border-purple-500/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="text-xs font-extrabold text-on-surface flex items-center gap-1.5">
-                <span>Beneficiário:</span>
-                <span className="text-purple-600 dark:text-purple-400">ISMAEL DUARTE ORRICO</span>
-              </div>
-              <div className="text-[11px] text-outline font-medium flex items-center gap-2">
-                <span>Instituição: <strong>Nubank</strong></span>
-                <span>•</span>
-                <span>Chave Pix: <strong className="font-mono text-on-surface">(51) 9****-0968 (Protegida)</strong></span>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Data & Backup Section */}
         <section className="bg-surface-container-lowest dark:bg-inverse-surface/40 rounded-3xl p-6 border border-outline-variant/20 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-on-surface">Segurança de Dados & Backup</h3>
@@ -348,16 +317,18 @@ export const ProfileView: React.FC = () => {
             </label>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <button
-              onClick={() => {
-                if (confirm("Tem certeza que deseja restaurar as configurações e dados iniciais de fábrica?")) {
-                  resetToDefaults();
-                }
-              }}
+              onClick={() => setConfirmModal({ isOpen: true, type: "reset" })}
               className="text-xs text-error font-semibold flex items-center gap-1 hover:underline"
             >
               <RotateCcw className="w-3.5 h-3.5" /> Resetar Dados do App para o Padrão
+            </button>
+            <button
+              onClick={() => setConfirmModal({ isOpen: true, type: "logout" })}
+              className="text-xs text-outline font-semibold flex items-center gap-1 hover:text-on-surface transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Sair da conta (Logout)
             </button>
           </div>
         </section>
@@ -369,6 +340,24 @@ export const ProfileView: React.FC = () => {
         onClose={() => setIsAvatarModalOpen(false)}
         user={user}
         onSaveAvatar={handleSaveAvatar}
+      />
+
+      {/* Confirm Modals */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen && confirmModal.type === "reset"}
+        title="Resetar Dados"
+        message="Tem certeza que deseja restaurar as configurações e dados iniciais de fábrica? Esta ação não pode ser desfeita."
+        confirmText="Resetar"
+        onConfirm={() => resetToDefaults()}
+        onCancel={() => setConfirmModal({ isOpen: false, type: null })}
+      />
+      <ConfirmModal
+        isOpen={confirmModal.isOpen && confirmModal.type === "logout"}
+        title="Sair da Conta"
+        message="Tem certeza que deseja sair do aplicativo?"
+        confirmText="Sair"
+        onConfirm={() => logout()}
+        onCancel={() => setConfirmModal({ isOpen: false, type: null })}
       />
     </div>
   );

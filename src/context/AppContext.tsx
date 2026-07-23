@@ -32,6 +32,11 @@ interface AppContextType {
   selectedMonth: string; // YYYY-MM
   setSelectedMonth: (month: string) => void;
   
+  // Auth
+  isAuthenticated: boolean;
+  login: (token: string, userData: any) => void;
+  logout: () => void;
+
   // Modals
   isAddTxModalOpen: boolean;
   txModalDefaultType: 'income' | 'expense' | 'transfer';
@@ -62,6 +67,7 @@ interface AppContextType {
   updateBudget: (categoryId: string, monthlyLimit: number) => void;
 
   markAllNotificationsRead: () => void;
+  markNotificationRead: (id: string) => void;
   addNotification: (notif: Omit<NotificationItem, "id" | "uuid" | "createdAt" | "updatedAt" | "ownerId">) => void;
   deleteNotification: (id: string) => void;
   clearAllNotifications: () => void;
@@ -87,6 +93,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [txModalDefaultType, setTxModalDefaultType] = useState<'income' | 'expense' | 'transfer'>('expense');
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return !!localStorage.getItem("fluxo_jwt_token");
+  });
+
+  const login = (token: string, userData: any) => {
+    localStorage.setItem("fluxo_jwt_token", token);
+    setIsAuthenticated(true);
+    // You could also update the user profile here if needed:
+    setState((prev) => ({
+      ...prev,
+      user: { ...prev.user, ...userData, isPinLocked: false }
+    }));
+  };
+
+  const logout = () => {
+    localStorage.removeItem("fluxo_jwt_token");
+    setIsAuthenticated(false);
+    setActiveTab("dashboard");
+  };
 
   // Sync to local storage whenever state changes
   useEffect(() => {
@@ -364,6 +391,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const markNotificationRead = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      notifications: prev.notifications.map((n) => n.id === id ? { ...n, isRead: true } : n),
+    }));
+  };
+
   const deleteNotification = (id: string) => {
     setState((prev) => ({
       ...prev,
@@ -508,6 +542,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notifications: state.notifications,
         activeTab,
         setActiveTab,
+        isAuthenticated,
+        login,
+        logout,
         isBalanceHidden,
         toggleBalanceHidden,
         selectedMonth,
@@ -534,6 +571,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addCategory,
         updateBudget,
         markAllNotificationsRead,
+        markNotificationRead,
         addNotification,
         deleteNotification,
         clearAllNotifications,

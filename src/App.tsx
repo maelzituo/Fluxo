@@ -7,13 +7,18 @@ import { NotificationsView } from "./views/NotificationsView";
 import { ReferralView } from "./views/ReferralView";
 import { PremiumView } from "./views/PremiumView";
 import { ProfileView } from "./views/ProfileView";
+import { LoginView } from "./views/LoginView";
 import { BottomNavBar } from "./components/BottomNavBar";
 import { TransactionModal } from "./components/TransactionModal";
 import { AiAssistantModal } from "./views/AiAssistantModal";
 import { SecurityLockModal } from "./components/SecurityLockModal";
 
 const AppContent: React.FC = () => {
-  const { activeTab } = useApp();
+  const { activeTab, isAuthenticated } = useApp();
+
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
 
   const renderCurrentTab = () => {
     switch (activeTab) {
