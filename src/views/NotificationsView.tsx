@@ -21,7 +21,7 @@ export const NotificationsView: React.FC = () => {
   const earlierNotifications = notifications.filter((n) => n.dateGroup === "earlier");
 
   return (
-    <div className="min-h-screen pb-28 bg-background dark:bg-inverse-surface/10 text-on-surface">
+    <div className="min-h-screen pb-28 bg-background text-on-surface">
       <Header
         title="Notificações"
         showBackBtn={true}

@@ -17,7 +17,9 @@ import {
   Check, 
   ShieldCheck, 
   FileJson,
-  Camera
+  Camera,
+  QrCode,
+  ShieldAlert
 } from "lucide-react";
 
 export const ProfileView: React.FC = () => {
@@ -89,7 +91,7 @@ export const ProfileView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-28 bg-background dark:bg-inverse-surface/10 text-on-surface">
+    <div className="min-h-screen pb-28 bg-background text-on-surface">
       <Header title="Perfil & Configurações" />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-4 space-y-6">
@@ -277,6 +279,41 @@ export const ProfileView: React.FC = () => {
               >
                 Bloquear Agora
               </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Nubank Pix Destination Info */}
+        <section className="bg-surface-container-lowest dark:bg-inverse-surface/40 rounded-3xl p-6 border border-purple-500/20 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 bg-purple-600 text-white font-black text-xs rounded-2xl flex items-center justify-center shadow-xs">
+                NU
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-on-surface">Conta de Recebimento do App</h3>
+                <p className="text-[11px] text-outline">
+                  Pagamentos de assinaturas direcionados automaticamente
+                </p>
+              </div>
+            </div>
+
+            <span className="text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400 font-extrabold px-2.5 py-1 rounded-full uppercase flex items-center gap-1 border border-purple-500/20">
+              <Lock className="w-3 h-3" /> Chave Protegida
+            </span>
+          </div>
+
+          <div className="p-4 bg-purple-500/5 dark:bg-purple-500/10 rounded-2xl border border-purple-500/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="text-xs font-extrabold text-on-surface flex items-center gap-1.5">
+                <span>Beneficiário:</span>
+                <span className="text-purple-600 dark:text-purple-400">ISMAEL DUARTE ORRICO</span>
+              </div>
+              <div className="text-[11px] text-outline font-medium flex items-center gap-2">
+                <span>Instituição: <strong>Nubank</strong></span>
+                <span>•</span>
+                <span>Chave Pix: <strong className="font-mono text-on-surface">(51) 9****-0968 (Protegida)</strong></span>
+              </div>
             </div>
           </div>
         </section>

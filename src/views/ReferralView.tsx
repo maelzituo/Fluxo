@@ -33,7 +33,7 @@ export const ReferralView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-28 bg-background dark:bg-inverse-surface/10 text-on-surface">
+    <div className="min-h-screen pb-28 bg-background text-on-surface">
       <Header
         title="Indique e Ganhe"
         showBackBtn={true}

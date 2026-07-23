@@ -100,7 +100,7 @@ export const DashboardView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-28 bg-background dark:bg-inverse-surface/10 text-on-surface">
+    <div className="min-h-screen pb-28 bg-background text-on-surface">
       <Header />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-4 space-y-6">

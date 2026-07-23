@@ -16,6 +16,8 @@ import {
   Check
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import QRCode from "qrcode";
+import { generatePixPayload } from "../utils/pix";
 
 interface PaymentCheckoutModalProps {
   isOpen: boolean;
@@ -45,10 +47,40 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
   // Pix state
   const [copiedPix, setCopiedPix] = useState(false);
   const [pixTimeLeft, setPixTimeLeft] = useState(300); // 5 mins
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
 
   const price = planType === "premium_yearly" ? 99.90 : 12.90;
   const planLabel = planType === "premium_yearly" ? "Fluxo Premium Anual" : "Fluxo Premium Mensal";
-  const pixCopyCode = `00020126580014BR.GOV.BCB.PIX0136fluxo-pay-ee29-4c8d-8f2a-5523420212685802BR5915FLUXO PAY TECH6009SAO PAULO62070503***6304E29A`;
+
+  // Fixed Nubank Pix account details (Locked for clients)
+  const RECEBEDOR_NAME = "ISMAEL DUARTE ORRICO";
+  const PIX_KEY_FULL = "+5551998320968";
+  const BANK_NAME = "Nubank";
+  
+  // Real EMV BR Code / Pix Payload string with exact CRC16 checksum calculation
+  const pixCopyCode = generatePixPayload({
+    key: PIX_KEY_FULL,
+    merchantName: RECEBEDOR_NAME,
+    merchantCity: "PORTO ALEGRE",
+    amount: price,
+    txId: "FLUXOPAY",
+  });
+
+  // Generate valid QR code data URL whenever modal opens or plan changes
+  useEffect(() => {
+    if (isOpen && paymentMethod === "pix") {
+      QRCode.toDataURL(pixCopyCode, {
+        width: 320,
+        margin: 1,
+        color: {
+          dark: "#1e1b4b",
+          light: "#ffffff",
+        },
+      })
+        .then((url) => setQrCodeDataUrl(url))
+        .catch((err) => console.error("Error generating QR code:", err));
+    }
+  }, [isOpen, paymentMethod, price, pixCopyCode]);
 
   // Pix timer
   useEffect(() => {
@@ -266,25 +298,57 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               </button>
             </div>
 
-            {/* TAB 1: PIX INSTANTÂNEO */}
+            {/* TAB 1: PIX INSTANTÂNEO NUBANK */}
             {paymentMethod === "pix" && (
               <div className="space-y-4 animate-fadeIn">
+                {/* Beneficiary Info Banner */}
+                <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-2xl bg-purple-600 text-white font-black flex items-center justify-center text-xs shadow-xs">
+                      NU
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-on-surface">
+                        Beneficiário: <span className="text-purple-600 dark:text-purple-400">{RECEBEDOR_NAME}</span>
+                      </div>
+                      <div className="text-[10px] text-outline font-medium flex items-center gap-1.5">
+                        <span>Instituição: <strong>{BANK_NAME}</strong></span>
+                        <span>•</span>
+                        <span>Chave Protegida</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-1 bg-purple-500/20 text-purple-600 dark:text-purple-300 rounded-full">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                </div>
+
                 <div className="p-4 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col items-center text-center space-y-3">
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                     <Zap className="w-4 h-4 fill-emerald-500" />
-                    Aprovação Instantânea em 3 segundos
+                    Aprovação Instantânea via Pix Nubank
                   </div>
 
-                  {/* QR Code Graphic Placeholder */}
-                  <div className="w-36 h-36 bg-white p-2 rounded-2xl border border-outline-variant/30 shadow-xs flex flex-col items-center justify-center relative">
-                    <QrCode className="w-28 h-28 text-slate-800" />
-                    <span className="absolute text-[8px] bg-primary text-white font-black px-1 rounded bottom-1">
-                      FLUXO PAY
+                  {/* QR Code Graphic (Real Scannable QR Code Image) */}
+                  <div className="w-40 h-40 bg-white p-2.5 rounded-2xl border border-outline-variant/30 shadow-md flex flex-col items-center justify-center relative">
+                    {qrCodeDataUrl ? (
+                      <img 
+                        src={qrCodeDataUrl} 
+                        alt="QR Code Pix Nubank" 
+                        className="w-32 h-32 object-contain"
+                      />
+                    ) : (
+                      <div className="w-32 h-32 flex items-center justify-center text-outline text-xs">
+                        Gerando QR Code...
+                      </div>
+                    )}
+                    <span className="absolute text-[8px] bg-purple-600 text-white font-black px-1.5 py-0.5 rounded bottom-1 uppercase tracking-wider shadow-xs">
+                      NUBANK PIX
                     </span>
                   </div>
 
-                  <div className="text-[11px] text-outline">
-                    Aponte a câmera do seu banco ou copie a chave Pix abaixo.
+                  <div className="text-[11px] text-outline max-w-xs">
+                    Aponte a câmera do aplicativo do seu banco para o QR Code acima ou use os botões de cópia abaixo.
                   </div>
 
                   {/* Timer */}
@@ -293,25 +357,43 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                   </div>
                 </div>
 
+                {/* Chave Protegida & Copia e Cola */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[11px] font-bold text-outline uppercase">
+                      Chave Pix Protegida (Nubank)
+                    </label>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" /> Criptografada
+                    </span>
+                  </div>
+                  <div className="p-2.5 bg-surface-container-low border border-outline-variant/30 rounded-xl text-xs font-mono font-bold text-on-surface mb-3 flex items-center justify-between">
+                    <span>(51) 9****-0968</span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-sans font-extrabold uppercase">
+                      Titular: {RECEBEDOR_NAME}
+                    </span>
+                  </div>
+                </div>
+
                 {/* Copia e Cola */}
                 <div>
                   <label className="block text-[11px] font-bold text-outline uppercase mb-1">
-                    Código Pix Copia e Cola
+                    Código Pix Copia e Cola (BR Code Oficial)
                   </label>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       readOnly
                       value={pixCopyCode}
-                      className="flex-1 px-3 py-2 text-[11px] font-mono bg-surface-container-low border border-outline-variant/30 rounded-xl focus:outline-none"
+                      className="flex-1 px-3 py-2 text-[11px] font-mono bg-surface-container-low border border-outline-variant/30 rounded-xl focus:outline-none text-on-surface"
                     />
                     <button
                       type="button"
                       onClick={handleCopyPix}
-                      className="px-3.5 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl shadow-xs hover:bg-primary-container transition-all flex items-center gap-1"
+                      className="px-4 py-2 bg-purple-600 text-white font-bold text-xs rounded-xl shadow-xs hover:bg-purple-700 transition-all flex items-center gap-1.5 shrink-0"
                     >
                       {copiedPix ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      {copiedPix ? "Copiado!" : "Copiar"}
+                      {copiedPix ? "Copiado!" : "Copiar Código Pix"}
                     </button>
                   </div>
                 </div>
@@ -323,7 +405,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                   className="w-full py-3.5 bg-primary text-on-primary font-bold text-xs rounded-full shadow-md hover:bg-primary-container transition-all flex items-center justify-center gap-2"
                 >
                   <Sparkles className="w-4 h-4 text-yellow-300" />
-                  {isProcessing ? "Validando Pagamento Pix..." : "Já Paguei via Pix (Confirmar)"}
+                  {isProcessing ? "Validando Pagamento no Nubank..." : "Já Realizei o Pix (Confirmar Pagamento)"}
                 </button>
               </div>
             )}
