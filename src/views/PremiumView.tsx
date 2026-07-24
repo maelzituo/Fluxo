@@ -21,7 +21,8 @@ import {
   Loader2,
   Copy,
   CheckCircle2,
-  X
+  X,
+  AlertCircle
 } from "lucide-react";
 
 export const PremiumView: React.FC = () => {
@@ -32,6 +33,7 @@ export const PremiumView: React.FC = () => {
   
   // Pix Mercado Pago Modal State
   const [pixModalData, setPixModalData] = useState<{
+    paymentId: string;
     qrCode: string;
     qrCodeBase64?: string | null;
     planTitle: string;
@@ -40,6 +42,7 @@ export const PremiumView: React.FC = () => {
   const [copiedPix, setCopiedPix] = useState(false);
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
   const [isCheckingPayment, setIsCheckingPayment] = useState(false);
+  const [paymentCheckError, setPaymentCheckError] = useState<string | null>(null);
 
   const isPremium = user.isPremium;
 
@@ -112,6 +115,7 @@ export const PremiumView: React.FC = () => {
   const handleOpenPix = async (billing: "monthly" | "yearly") => {
     setSelectedBilling(billing);
     setIsGeneratingPix(true);
+    setPaymentCheckError(null);
 
     try {
       const token = localStorage.getItem("fluxo_jwt_token");
@@ -129,6 +133,7 @@ export const PremiumView: React.FC = () => {
 
       if (res.isJson && res.ok && res.data?.qrCode) {
         setPixModalData({
+          paymentId: res.data.paymentId || `pix_sim_${Date.now()}`,
           qrCode: res.data.qrCode,
           qrCodeBase64: res.data.qrCodeBase64,
           planTitle,
@@ -136,8 +141,10 @@ export const PremiumView: React.FC = () => {
         });
       } else {
         // Fallback simulated Pix code
+        const simId = `pix_sim_${Date.now()}`;
         const mockPix = `00020126580014BR.GOV.BCB.PIX0136fluxopayments@mercadopago.com.br5204000053039865405${price.toFixed(2)}5802BR5913Fluxo Finance6009SAO PAULO62070503***6304E2D1`;
         setPixModalData({
+          paymentId: simId,
           qrCode: mockPix,
           qrCodeBase64: null,
           planTitle,
@@ -147,8 +154,10 @@ export const PremiumView: React.FC = () => {
     } catch (error: any) {
       const price = billing === "yearly" ? 99.90 : 12.90;
       const planTitle = billing === "yearly" ? "Fluxo Premium Anual" : "Fluxo Premium Mensal";
+      const simId = `pix_sim_${Date.now()}`;
       const mockPix = `00020126580014BR.GOV.BCB.PIX0136fluxopayments@mercadopago.com.br5204000053039865405${price.toFixed(2)}5802BR5913Fluxo Finance6009SAO PAULO62070503***6304E2D1`;
       setPixModalData({
+        paymentId: simId,
         qrCode: mockPix,
         qrCodeBase64: null,
         planTitle,
@@ -168,42 +177,85 @@ export const PremiumView: React.FC = () => {
   };
 
   const handleActivatePixNow = async () => {
+    if (!pixModalData?.paymentId) return;
     setIsCheckingPayment(true);
-    
-    // 1. Tenta verificar no servidor se o webhook do Mercado Pago já atualizou a conta
+    setPaymentCheckError(null);
+
     try {
       const token = localStorage.getItem("fluxo_jwt_token");
+      const headers: Record<string, string> = {};
       if (token) {
-        const res = await safeFetchJson("/api/user/me", {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        
-        if (res.isJson && res.ok && res.data?.success && res.data?.user?.isPremium) {
-          setIsCheckingPayment(false);
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const res = await safeFetchJson(`/api/payment/check-status/${pixModalData.paymentId}`, {
+        headers
+      });
+
+      if (res.isJson && res.ok && res.data?.approved) {
+        setIsCheckingPayment(false);
+        upgradePlan(selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly");
+        if (res.data.user) {
           setUser(prev => ({
             ...prev,
-            isPremium: res.data.user.isPremium,
+            isPremium: true,
             premiumSince: res.data.user.premiumSince,
             planExpiryDate: res.data.user.premiumExpires,
             plan: selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly"
           }));
-          setPixModalData(null);
-          alert("🎉 Pagamento verificado e confirmado! Sua assinatura Premium foi ativada.");
-          return;
         }
+        setPixModalData(null);
+        alert("🎉 Pagamento Pix verificado e confirmado! Sua assinatura Premium foi ativada.");
+      } else {
+        setIsCheckingPayment(false);
+        const msg = res.data?.message || "O pagamento via Pix ainda não foi confirmado pelo banco. Por favor, conclua a transferência no app do seu banco e tente novamente.";
+        setPaymentCheckError(msg);
       }
     } catch (err) {
-      console.error("Erro ao verificar pagamento no servidor:", err);
-    }
-
-    // 2. Se o webhook não atualizou (ou se estamos em ambiente sem credenciais reais)
-    // Usamos um timeout para simular a validação com a rede bancária.
-    setTimeout(() => {
       setIsCheckingPayment(false);
-      upgradePlan(selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly");
-      setPixModalData(null);
-      alert("🎉 Pagamento verificado e confirmado (Modo Simulação)! Sua assinatura Premium foi ativada.");
-    }, 2500);
+      setPaymentCheckError("Não foi possível verificar o pagamento no momento. Verifique sua conexão e tente novamente.");
+    }
+  };
+
+  const handleSimulateApprovePix = async () => {
+    if (!pixModalData?.paymentId) return;
+    setIsCheckingPayment(true);
+    setPaymentCheckError(null);
+
+    try {
+      const token = localStorage.getItem("fluxo_jwt_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const res = await safeFetchJson("/api/payment/simulate-approve-pix", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ paymentId: pixModalData.paymentId })
+      });
+
+      if (res.isJson && res.ok && res.data?.approved) {
+        upgradePlan(selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly");
+        if (res.data.user) {
+          setUser(prev => ({
+            ...prev,
+            isPremium: true,
+            premiumSince: res.data.user.premiumSince,
+            planExpiryDate: res.data.user.premiumExpires,
+            plan: selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly"
+          }));
+        }
+        setPixModalData(null);
+        alert("🎉 Pagamento Pix Aprovado no Servidor (Modo Teste/Ambiente)! Sua assinatura Premium foi ativada com sucesso.");
+      } else {
+        setPaymentCheckError("Erro ao simular aprovação do Pix no servidor.");
+      }
+    } catch (err) {
+      setPaymentCheckError("Erro na conexão ao simular pagamento.");
+    } finally {
+      setIsCheckingPayment(false);
+    }
   };
 
   const handleConfirmCancel = () => {
@@ -622,6 +674,19 @@ export const PremiumView: React.FC = () => {
               </div>
             </div>
 
+            {/* Payment Check Warning or Error Banner */}
+            {paymentCheckError && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 rounded-xl text-xs flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                <div className="space-y-1">
+                  <p className="font-semibold leading-tight">{paymentCheckError}</p>
+                  <p className="text-[10px] opacity-80">
+                    Após efetuar o Pix no app do seu banco, aguarde alguns instantes e clique em "Verificar Pagamento".
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Confirm Payment / Instant Activate Button */}
             <div className="space-y-2 pt-2">
               <button
@@ -632,7 +697,7 @@ export const PremiumView: React.FC = () => {
                 {isCheckingPayment ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Validando pagamento...
+                    Consultando banco...
                   </>
                 ) : (
                   <>
@@ -641,6 +706,16 @@ export const PremiumView: React.FC = () => {
                   </>
                 )}
               </button>
+
+              <button
+                onClick={handleSimulateApprovePix}
+                disabled={isCheckingPayment}
+                className="w-full py-2 bg-surface-container-high hover:bg-surface-variant text-primary font-bold text-[11px] rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                Simular Pagamento Aprovado (Modo Testes)
+              </button>
+
               <button
                 onClick={() => setPixModalData(null)}
                 className="w-full py-2 text-center text-xs text-outline hover:text-on-surface font-medium cursor-pointer"

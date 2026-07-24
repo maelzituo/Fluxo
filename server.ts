@@ -685,10 +685,23 @@ app.post("/api/payment/create-pix", authenticateToken, async (req: any, res: any
         const qrCodeBase64 = response.point_of_interaction?.transaction_data?.qr_code_base64;
 
         if (qrCode) {
+          const realPaymentId = response.id.toString();
+          MOCK_SUBSCRIPTIONS.push({
+            id: `sub_${Date.now()}`,
+            user_id: userId,
+            payment_id: realPaymentId,
+            plano: planTitle || "Fluxo Premium",
+            valor: numPrice,
+            status: response.status || "pending",
+            type: "pix",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
           return res.json({
             success: true,
             isReal: true,
-            paymentId: response.id,
+            paymentId: realPaymentId,
             qrCode,
             qrCodeBase64: qrCodeBase64 ? `data:image/png;base64,${qrCodeBase64}` : null,
             ticketUrl: response.point_of_interaction?.transaction_data?.ticket_url,
@@ -700,12 +713,25 @@ app.post("/api/payment/create-pix", authenticateToken, async (req: any, res: any
     }
 
     // Fallback Simulated Pix Code
+    const simPaymentId = `pix_sim_${Date.now()}_${userId}`;
     const mockPixCopyPaste = `00020126580014BR.GOV.BCB.PIX0136fluxopayments@mercadopago.com.br5204000053039865405${numPrice.toFixed(2)}5802BR5913Fluxo Finance6009SAO PAULO62070503***6304E2D1`;
+
+    MOCK_SUBSCRIPTIONS.push({
+      id: `sub_${Date.now()}`,
+      user_id: userId,
+      payment_id: simPaymentId,
+      plano: planTitle || "Fluxo Premium",
+      valor: numPrice,
+      status: "pending",
+      type: "pix",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
 
     res.json({
       success: true,
       isReal: false,
-      paymentId: `pix_sim_${Date.now()}`,
+      paymentId: simPaymentId,
       qrCode: mockPixCopyPaste,
       qrCodeBase64: null,
       message: "Código Pix Mercado Pago gerado com sucesso!"
@@ -713,6 +739,176 @@ app.post("/api/payment/create-pix", authenticateToken, async (req: any, res: any
   } catch (error: any) {
     console.error("Erro ao criar Pix Mercado Pago:", error);
     res.status(500).json({ error: "Falha ao gerar Pix Mercado Pago." });
+  }
+});
+
+// Check Payment Status Endpoint
+app.get("/api/payment/check-status/:paymentId", authenticateToken, async (req: any, res: any) => {
+  try {
+    const userId = req.user.userId;
+    const { paymentId } = req.params;
+
+    const user = MOCK_USERS.find((u) => u.id === userId);
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+
+    // If user is already registered as Premium
+    if (user.isPremium) {
+      return res.json({
+        success: true,
+        approved: true,
+        status: "approved",
+        isPremium: true,
+        user: {
+          isPremium: true,
+          premiumSince: user.premiumSince,
+          premiumExpires: user.premiumExpires,
+        },
+        message: "Assinatura ativada e confirmada!"
+      });
+    }
+
+    // 1. If it's a real Mercado Pago Payment ID
+    if (process.env.MERCADO_PAGO_ACCESS_TOKEN && paymentId && !paymentId.startsWith("pix_sim_")) {
+      try {
+        const paymentClient = new Payment(new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN }));
+        const paymentInfo = await paymentClient.get({ id: paymentId });
+        const mpStatus = paymentInfo.status; // 'approved', 'pending', 'rejected', 'in_process'
+
+        if (mpStatus === "approved") {
+          const expiresAt = new Date();
+          expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+          user.isPremium = true;
+          user.premiumSince = new Date().toISOString() as any;
+          user.premiumExpires = expiresAt.toISOString() as any;
+
+          const sub = MOCK_SUBSCRIPTIONS.find(s => s.payment_id === paymentId);
+          if (sub) {
+            sub.status = "approved";
+            sub.updated_at = new Date().toISOString();
+          }
+
+          return res.json({
+            success: true,
+            approved: true,
+            status: "approved",
+            isPremium: true,
+            user: {
+              isPremium: true,
+              premiumSince: user.premiumSince,
+              premiumExpires: user.premiumExpires,
+            },
+            message: "Pagamento Pix aprovado com sucesso via Mercado Pago!"
+          });
+        } else {
+          return res.json({
+            success: true,
+            approved: false,
+            status: mpStatus || "pending",
+            isPremium: false,
+            message: mpStatus === "rejected"
+              ? "O pagamento Pix foi recusado."
+              : "O pagamento Pix ainda não foi identificado. Aguardando confirmação do banco."
+          });
+        }
+      } catch (mpErr: any) {
+        console.warn("Erro ao consultar pagamento no Mercado Pago:", mpErr.message);
+      }
+    }
+
+    // 2. Fallback / Simulated check against backend state
+    const subscription = MOCK_SUBSCRIPTIONS.find(
+      s => (s.payment_id === paymentId || s.preference_id === paymentId) && s.user_id === userId
+    );
+
+    if (subscription && subscription.status === "approved") {
+      const expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+      user.isPremium = true;
+      user.premiumSince = new Date().toISOString() as any;
+      user.premiumExpires = expiresAt.toISOString() as any;
+
+      return res.json({
+        success: true,
+        approved: true,
+        status: "approved",
+        isPremium: true,
+        user: {
+          isPremium: true,
+          premiumSince: user.premiumSince,
+          premiumExpires: user.premiumExpires,
+        },
+        message: "Pagamento Pix aprovado!"
+      });
+    }
+
+    return res.json({
+      success: true,
+      approved: false,
+      status: subscription ? subscription.status : "pending",
+      isPremium: false,
+      message: "Pagamento via Pix ainda não foi identificado. Por favor, realize a transferência no seu aplicativo bancário e tente novamente."
+    });
+
+  } catch (error: any) {
+    console.error("Erro ao verificar status do pagamento:", error);
+    res.status(500).json({ error: "Erro interno ao verificar o pagamento." });
+  }
+});
+
+// Simulate Approval Endpoint (for Sandbox/Testing)
+app.post("/api/payment/simulate-approve-pix", authenticateToken, (req: any, res: any) => {
+  try {
+    const userId = req.user.userId;
+    const { paymentId } = req.body;
+
+    const user = MOCK_USERS.find((u) => u.id === userId);
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+
+    const sub = MOCK_SUBSCRIPTIONS.find(
+      (s) => s.payment_id === paymentId || (s.user_id === userId && s.status === "pending")
+    );
+
+    if (sub) {
+      sub.status = "approved";
+      sub.updated_at = new Date().toISOString();
+    } else {
+      MOCK_SUBSCRIPTIONS.push({
+        id: `sub_${Date.now()}`,
+        user_id: userId,
+        payment_id: paymentId || `pix_sim_${Date.now()}`,
+        status: "approved",
+        type: "pix",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+    user.isPremium = true;
+    user.premiumSince = new Date().toISOString() as any;
+    user.premiumExpires = expiresAt.toISOString() as any;
+
+    res.json({
+      success: true,
+      approved: true,
+      message: "Pagamento Pix aprovado no servidor! Agora a conta está validada como Premium.",
+      user: {
+        isPremium: true,
+        premiumSince: user.premiumSince,
+        premiumExpires: user.premiumExpires,
+      }
+    });
+  } catch (err: any) {
+    console.error("Erro ao simular aprovação do Pix:", err);
+    res.status(500).json({ error: "Falha ao simular aprovação de Pix." });
   }
 });
 
