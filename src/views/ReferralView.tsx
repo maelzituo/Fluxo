@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
+import { safeFetchJson } from "../lib/api";
 import { Header } from "../components/Header";
 import { 
   Gift, 
@@ -64,7 +65,7 @@ export const ReferralView: React.FC = () => {
     try {
       const token = localStorage.getItem("fluxo_jwt_token");
       if (token) {
-        const response = await fetch("/api/redeem-referral", {
+        const res = await safeFetchJson("/api/redeem-referral", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -73,26 +74,27 @@ export const ReferralView: React.FC = () => {
           body: JSON.stringify({ code: cleanCode })
         });
 
-        const data = await response.json();
-        if (response.ok && data.success) {
-          setRedeemSuccess(data.message || "🎉 Código resgatado com sucesso! 30 dias de Premium grátis ativados!");
-          
-          // Update user in client state
-          setUser(prev => ({
-            ...prev,
-            isPremium: true,
-            referralCount: (prev.referralCount || 0) + 1,
-            plan: "premium_monthly",
-            planExpiryDate: data.user?.premiumExpires || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
-          }));
+        if (res.isJson) {
+          if (res.ok && res.data?.success) {
+            setRedeemSuccess(res.data.message || "🎉 Código resgatado com sucesso! 30 dias de Premium grátis ativados!");
+            
+            // Update user in client state
+            setUser(prev => ({
+              ...prev,
+              isPremium: true,
+              referralCount: (prev.referralCount || 0) + 1,
+              plan: "premium_monthly",
+              planExpiryDate: res.data.user?.premiumExpires || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
+            }));
 
-          setInputCode("");
-          setIsRedeeming(false);
-          return;
-        } else {
-          setRedeemError(data.error || "Não foi possível validar o código.");
-          setIsRedeeming(false);
-          return;
+            setInputCode("");
+            setIsRedeeming(false);
+            return;
+          } else {
+            setRedeemError(res.error || "Não foi possível validar o código.");
+            setIsRedeeming(false);
+            return;
+          }
         }
       }
 
