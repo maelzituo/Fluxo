@@ -234,26 +234,18 @@ app.post("/api/register", registerLimiter, async (req, res) => {
 
     // Referral Code handling
     const userReferralCode = referralCode?.toString().trim().toUpperCase();
-    let isPremiumBonus = false;
-    let premiumSince = null;
-    let premiumExpires = null;
+    
+    // As per user request: "não quero que ative o premium sem pagamento"
+    // So we don't grant 30-day premium just for using a referral code.
+    const isPremiumBonus = false;
+    const premiumSince = null;
+    const premiumExpires = null;
 
     if (userReferralCode) {
-      isPremiumBonus = true;
-      const now = new Date();
-      const expires = new Date();
-      expires.setDate(expires.getDate() + 30);
-
-      premiumSince = now.toISOString().split("T")[0];
-      premiumExpires = expires.toISOString().split("T")[0];
-
       // Find referrer user if exists
       const referrer = await findUserByIdentity(userReferralCode);
       if (referrer) {
         referrer.referralCount = (referrer.referralCount || 0) + 1;
-        referrer.isPremium = true;
-        referrer.premiumSince = referrer.premiumSince || premiumSince;
-        referrer.premiumExpires = premiumExpires;
         await saveUser(referrer);
       }
     }
@@ -852,11 +844,19 @@ app.post("/api/payment/create-pix", authenticateToken, async (req: any, res: any
     if (process.env.MERCADO_PAGO_ACCESS_TOKEN) {
       try {
         const payment = new Payment(new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN }));
+        
+        // Define expiração do Pix para 30 minutos a partir de agora
+        const expirationDate = new Date();
+        expirationDate.setMinutes(expirationDate.getMinutes() + 30);
+        // O formato precisa ser ISO 8601 completo incluindo fuso (o MercadoPago aceita .toISOString() se tiver 'Z')
+        const isoExpiration = expirationDate.toISOString();
+
         const response = await payment.create({
           body: {
             transaction_amount: numPrice,
             description: planTitle || "Assinatura Fluxo Premium (Pix Mercado Pago)",
             payment_method_id: "pix",
+            date_of_expiration: isoExpiration,
             payer: {
               email: payerEmail,
               first_name: user?.name?.split(" ")[0] || "Cliente",

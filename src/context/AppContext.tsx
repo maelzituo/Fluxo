@@ -108,10 +108,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = (token: string, userData: any) => {
     localStorage.setItem("fluxo_jwt_token", token);
     setIsAuthenticated(true);
-    // You could also update the user profile here if needed:
+    
+    // Agora que o token está salvo, carrega o estado específico deste usuário
+    const userState = loadAppState();
+
     setState((prev) => ({
-      ...prev,
-      user: { ...prev.user, ...userData, isPinLocked: false }
+      ...userState,
+      user: { ...userState.user, ...userData, isPinLocked: false }
     }));
   };
 
@@ -119,12 +122,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem("fluxo_jwt_token");
     setIsAuthenticated(false);
     setActiveTab("dashboard");
+    
+    // Reseta o estado local para evitar vazamento de dados entre logins
+    setState({
+      user: initialUserProfile,
+      transactions: [],
+      categories: initialCategories,
+      accounts: [],
+      goals: [],
+      budgets: [],
+      subscriptions: [],
+      notifications: [],
+    });
   };
 
   // Sync to local storage whenever state changes
   useEffect(() => {
     saveAppState(state);
   }, [state]);
+
+  // Validate session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      const token = localStorage.getItem("fluxo_jwt_token");
+      if (!token) {
+         if (isAuthenticated) setIsAuthenticated(false);
+         return;
+      }
+      
+      try {
+        const response = await fetch("/api/user/me", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+           logout();
+        } else {
+           const result = await response.json();
+           if (result.user) {
+             setState(prev => ({
+               ...prev,
+               user: { ...prev.user, ...result.user }
+             }));
+           }
+        }
+      } catch (err) {
+         console.warn("Session check failed", err);
+      }
+    };
+
+    checkSession();
+  }, []);
 
   // Check premium expiry date on boot
   useEffect(() => {

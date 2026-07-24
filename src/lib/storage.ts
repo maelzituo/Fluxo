@@ -19,9 +19,26 @@ import {
   UserProfile,
 } from "../types";
 
-const STORAGE_KEY = "fluxo_app_state_v1";
+const getStorageKey = () => {
+  const token = localStorage.getItem("fluxo_jwt_token");
+  if (!token) return "fluxo_app_state_v1";
+  
+  try {
+    const payloadBase64 = token.split('.')[1];
+    if (payloadBase64) {
+      const decodedJson = JSON.parse(atob(payloadBase64));
+      if (decodedJson.userId) {
+        return `fluxo_app_state_v1_${decodedJson.userId}`;
+      }
+    }
+  } catch(e) {
+    // ignore
+  }
+  return "fluxo_app_state_v1";
+};
 
 export interface AppState {
+
   user: UserProfile;
   transactions: Transaction[];
   categories: Category[];
@@ -33,40 +50,60 @@ export interface AppState {
 }
 
 export function loadAppState(): AppState {
+  const key = getStorageKey();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
         user: { ...initialUserProfile, ...parsed.user },
-        transactions: parsed.transactions || initialTransactions,
+        transactions: parsed.transactions || [],
         categories: parsed.categories || initialCategories,
-        accounts: parsed.accounts || initialAccounts,
-        goals: parsed.goals || initialGoals,
-        budgets: parsed.budgets || initialBudgets,
-        subscriptions: parsed.subscriptions || initialSubscriptions,
-        notifications: parsed.notifications || initialNotifications,
+        accounts: parsed.accounts || [],
+        goals: parsed.goals || [],
+        budgets: parsed.budgets || [],
+        subscriptions: parsed.subscriptions || [],
+        notifications: parsed.notifications || [],
       };
     }
   } catch (err) {
     console.error("Failed to load state from localStorage:", err);
   }
 
+  // Se for o admin de demonstração e for fallback, podemos carregar alguns dados demo.
+  // Mas por padrão (nova conta), iniciaremos vazio.
+  const isDemo = key === "fluxo_app_state_v1";
+
   return {
     user: initialUserProfile,
-    transactions: initialTransactions,
+    transactions: isDemo ? initialTransactions : [],
     categories: initialCategories,
-    accounts: initialAccounts,
-    goals: initialGoals,
-    budgets: initialBudgets,
-    subscriptions: initialSubscriptions,
-    notifications: initialNotifications,
+    accounts: isDemo ? initialAccounts : [
+      {
+        id: "acc_default",
+        uuid: "acc-uuid-default",
+        name: "Minha Conta",
+        type: "checking",
+        balance: 0,
+        color: "#126d27",
+        icon: "Wallet",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        ownerId: "default",
+        status: "active"
+      }
+    ],
+    goals: isDemo ? initialGoals : [],
+    budgets: isDemo ? initialBudgets : [],
+    subscriptions: isDemo ? initialSubscriptions : [],
+    notifications: isDemo ? initialNotifications : [],
   };
 }
 
 export function saveAppState(state: AppState) {
+  const key = getStorageKey();
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify(state));
   } catch (err) {
     console.error("Failed to save state to localStorage:", err);
   }

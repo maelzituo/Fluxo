@@ -116,36 +116,9 @@ export const LoginView: React.FC = () => {
           setError(response.error || "Nome de usuário ou senha incorretos.");
           return;
         }
+      } else {
+        setError("Erro inesperado no servidor.");
       }
-
-      // Fallback for offline / static hosting: check local storage users
-      const localUsers = getLocalUsers();
-      const cleanDigits = cleanUsername.replace(/\D/g, "");
-      const matched = localUsers.find(
-        (u) => 
-          u.username === cleanUsername || 
-          (cleanDigits && u.phone && u.phone.replace(/\D/g, "") === cleanDigits)
-      );
-
-      if (matched) {
-        if (matched.password === password) {
-          login(`token_local_${Date.now()}`, matched);
-          return;
-        } else {
-          setError("Senha incorreta. Tente novamente.");
-          return;
-        }
-      }
-
-      // Default demo login fallback if user entered any credentials while offline
-      const demoUser = {
-        id: `user_${Date.now()}`,
-        name: cleanUsername.split("@")[0].toUpperCase(),
-        username: cleanUsername,
-        phone: cleanDigits || "11999999999",
-        isPremium: false,
-      };
-      login(`token_demo_${Date.now()}`, demoUser);
     } catch (err: any) {
       setError("Não foi possível conectar ao servidor. Tente novamente.");
     } finally {
@@ -210,38 +183,9 @@ export const LoginView: React.FC = () => {
           setError(response.error || "Ocorreu um erro ao criar a conta.");
           return;
         }
+      } else {
+         setError("Erro inesperado no servidor.");
       }
-
-      // Fallback for static/offline hosting: perform local registration
-      const localUsers = getLocalUsers();
-      const existing = localUsers.find((u) => u.username === cleanUsername);
-
-      if (existing) {
-        setError("Este nome de usuário já está em uso.");
-        return;
-      }
-
-      const now = new Date();
-      const expires = new Date();
-      expires.setDate(expires.getDate() + 30);
-      const isBonus = !!cleanReferral;
-
-      const newUser = {
-        id: `user_${Date.now()}`,
-        name: cleanName,
-        username: cleanUsername,
-        phone: cleanPhone,
-        email: cleanEmail,
-        isPremium: isBonus,
-        premiumSince: isBonus ? now.toISOString().split("T")[0] : null,
-        premiumExpires: isBonus ? expires.toISOString().split("T")[0] : null,
-        referralCode: `FLUXO-${cleanUsername.slice(0, 4).toUpperCase()}${Math.floor(100 + Math.random() * 899)}`,
-        referralCount: 0,
-        password,
-      };
-
-      saveLocalUser(newUser);
-      login(`token_local_${Date.now()}`, newUser);
     } catch (err: any) {
       setError("Não foi possível criar a conta. Tente novamente.");
     } finally {
@@ -289,23 +233,7 @@ export const LoginView: React.FC = () => {
         setError(response.error || "Não encontramos nenhuma conta com essas informações.");
       }
     } catch (err: any) {
-      // Fallback local search
-      const localUsers = getLocalUsers();
-      const cleanDigits = identity.replace(/\D/g, "");
-      const matched = localUsers.find(
-        (u) => u.username === identity || (cleanDigits && u.phone && u.phone.replace(/\D/g, "") === cleanDigits)
-      );
-
-      if (matched) {
-        const code = "123456";
-        setRecoveryInfo({ username: matched.username, code });
-        setResetUsername(matched.username);
-        setResetCode(code);
-        setSuccessMessage(`Código de verificação enviado! Digite o código e a nova senha.`);
-        setMode("reset");
-      } else {
-        setError("Não encontramos uma conta com esse usuário ou telefone.");
-      }
+      setError("Não foi possível conectar ao servidor. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
@@ -357,19 +285,7 @@ export const LoginView: React.FC = () => {
         setError(response.error || "Erro ao redefinir a senha.");
       }
     } catch (err: any) {
-      // Fallback local update
-      const localUsers = getLocalUsers();
-      const userIdx = localUsers.findIndex((u) => u.username === resetUsername);
-      if (userIdx >= 0) {
-        localUsers[userIdx].password = newPassword;
-        localStorage.setItem("fluxo_registered_users", JSON.stringify(localUsers));
-        setSuccessMessage("Senha redefinida com sucesso! Pode fazer login.");
-        setUsername(resetUsername);
-        setPassword(newPassword);
-        setMode("login");
-      } else {
-        setError("Não foi possível alterar a senha. Tente novamente.");
-      }
+      setError("Não foi possível alterar a senha. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
