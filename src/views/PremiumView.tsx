@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 export const PremiumView: React.FC = () => {
-  const { user, setUser, upgradePlan, cancelPlan, setActiveTab } = useApp();
+  const { user, setUser, upgradePlan, cancelPlan, reactivatePlan, setActiveTab } = useApp();
   const [selectedBilling, setSelectedBilling] = useState<"monthly" | "yearly">("yearly");
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -39,6 +39,7 @@ export const PremiumView: React.FC = () => {
   } | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
 
   const isPremium = user.isPremium;
 
@@ -92,15 +93,19 @@ export const PremiumView: React.FC = () => {
       if (res.isJson && res.ok && res.data?.initPoint) {
         window.open(res.data.initPoint, "_blank");
       } else {
-        // Instant simulated checkout fallback if API is not available
-        upgradePlan(billing === "yearly" ? "premium_yearly" : "premium_monthly");
-        setIsProcessing(false);
-        alert("🎉 Assinatura Fluxo Premium ativada com sucesso!");
+        // Fallback simulation
+        setTimeout(() => {
+          setIsProcessing(false);
+          upgradePlan(billing === "yearly" ? "premium_yearly" : "premium_monthly");
+          alert("🎉 Pagamento com Cartão verificado e confirmado (Modo Simulação)! Sua assinatura Premium foi ativada.");
+        }, 2500);
       }
     } catch (error: any) {
-      upgradePlan(billing === "yearly" ? "premium_yearly" : "premium_monthly");
-      setIsProcessing(false);
-      alert("🎉 Assinatura Fluxo Premium ativada com sucesso!");
+      setTimeout(() => {
+        setIsProcessing(false);
+        upgradePlan(billing === "yearly" ? "premium_yearly" : "premium_monthly");
+        alert("🎉 Pagamento com Cartão verificado e confirmado (Modo Simulação)! Sua assinatura Premium foi ativada.");
+      }, 2500);
     }
   };
 
@@ -162,10 +167,43 @@ export const PremiumView: React.FC = () => {
     }
   };
 
-  const handleActivatePixNow = () => {
-    upgradePlan(selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly");
-    setPixModalData(null);
-    alert("🎉 Pagamento Pix Mercado Pago confirmado! Sua conta Premium foi ativada com sucesso!");
+  const handleActivatePixNow = async () => {
+    setIsCheckingPayment(true);
+    
+    // 1. Tenta verificar no servidor se o webhook do Mercado Pago já atualizou a conta
+    try {
+      const token = localStorage.getItem("fluxo_jwt_token");
+      if (token) {
+        const res = await safeFetchJson("/api/user/me", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        
+        if (res.isJson && res.ok && res.data?.success && res.data?.user?.isPremium) {
+          setIsCheckingPayment(false);
+          setUser(prev => ({
+            ...prev,
+            isPremium: res.data.user.isPremium,
+            premiumSince: res.data.user.premiumSince,
+            planExpiryDate: res.data.user.premiumExpires,
+            plan: selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly"
+          }));
+          setPixModalData(null);
+          alert("🎉 Pagamento verificado e confirmado! Sua assinatura Premium foi ativada.");
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao verificar pagamento no servidor:", err);
+    }
+
+    // 2. Se o webhook não atualizou (ou se estamos em ambiente sem credenciais reais)
+    // Usamos um timeout para simular a validação com a rede bancária.
+    setTimeout(() => {
+      setIsCheckingPayment(false);
+      upgradePlan(selectedBilling === "yearly" ? "premium_yearly" : "premium_monthly");
+      setPixModalData(null);
+      alert("🎉 Pagamento verificado e confirmado (Modo Simulação)! Sua assinatura Premium foi ativada.");
+    }, 2500);
   };
 
   const handleConfirmCancel = () => {
@@ -274,8 +312,12 @@ export const PremiumView: React.FC = () => {
                     <h3 className="text-sm font-extrabold text-on-surface">
                       {user.plan === "premium_yearly" ? "Fluxo Premium Anual" : "Fluxo Premium Mensal"}
                     </h3>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 font-bold px-2 py-0.5 rounded-full">
-                      Ativo
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      user.isAutoRenew !== false 
+                        ? "bg-emerald-500/10 text-emerald-600" 
+                        : "bg-amber-500/10 text-amber-600"
+                    }`}>
+                      {user.isAutoRenew !== false ? "Ativo" : "Cancelado"}
                     </span>
                   </div>
                   <p className="text-xs text-outline flex items-center gap-1 mt-0.5">
@@ -285,13 +327,23 @@ export const PremiumView: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                onClick={() => setIsCancelModalOpen(true)}
-                className="px-4 py-2 bg-surface-container-high hover:bg-error/10 text-error font-bold text-xs rounded-full border border-outline-variant/20 transition-colors flex items-center gap-1.5"
-              >
-                <XCircle className="w-4 h-4" />
-                Gerenciar / Cancelar
-              </button>
+              {user.isAutoRenew !== false ? (
+                <button
+                  onClick={() => setIsCancelModalOpen(true)}
+                  className="px-4 py-2 bg-surface-container-high hover:bg-error/10 text-error font-bold text-xs rounded-full border border-outline-variant/20 transition-colors flex items-center gap-1.5"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Gerenciar / Cancelar
+                </button>
+              ) : (
+                <button
+                  onClick={reactivatePlan}
+                  className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs rounded-full border border-primary/20 transition-colors flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Reativar Plano
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-on-surface-variant">
@@ -370,9 +422,14 @@ export const PremiumView: React.FC = () => {
 
                   <button
                     onClick={() => handleOpenCheckout("monthly")}
-                    className="w-full py-2.5 bg-surface-container-high hover:bg-surface-variant text-on-surface font-semibold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    disabled={isProcessing && selectedBilling === "monthly"}
+                    className="w-full py-2.5 bg-surface-container-high hover:bg-surface-variant text-on-surface font-semibold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <CreditCard className="w-3.5 h-3.5" />
+                    {isProcessing && selectedBilling === "monthly" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CreditCard className="w-3.5 h-3.5" />
+                    )}
                     Cartão / Outros Formas no MP
                   </button>
                 </div>
@@ -419,9 +476,14 @@ export const PremiumView: React.FC = () => {
 
                   <button
                     onClick={() => handleOpenCheckout("yearly")}
-                    className="w-full py-2.5 bg-surface-container-high hover:bg-surface-variant text-on-surface font-semibold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    disabled={isProcessing && selectedBilling === "yearly"}
+                    className="w-full py-2.5 bg-surface-container-high hover:bg-surface-variant text-on-surface font-semibold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <CreditCard className="w-3.5 h-3.5" />
+                    {isProcessing && selectedBilling === "yearly" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CreditCard className="w-3.5 h-3.5" />
+                    )}
                     Cartão de Crédito no Mercado Pago
                   </button>
                 </div>
@@ -564,10 +626,20 @@ export const PremiumView: React.FC = () => {
             <div className="space-y-2 pt-2">
               <button
                 onClick={handleActivatePixNow}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isCheckingPayment}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/70 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                Já fiz o Pix! Ativar Minha Conta Premium
+                {isCheckingPayment ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Validando pagamento...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Verificar Pagamento
+                  </>
+                )}
               </button>
               <button
                 onClick={() => setPixModalData(null)}

@@ -126,6 +126,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveAppState(state);
   }, [state]);
 
+  // Check premium expiry date on boot
+  useEffect(() => {
+    if (state.user.isPremium && state.user.planExpiryDate) {
+      const expiry = new Date(state.user.planExpiryDate);
+      if (new Date() > expiry) {
+        setState(prev => ({
+          ...prev,
+          user: {
+            ...prev.user,
+            isPremium: false,
+            plan: "free",
+            isAutoRenew: false,
+          }
+        }));
+        
+        addNotification({
+          title: "Premium Expirado",
+          message: "Seu plano Fluxo Premium chegou ao fim. Assine novamente para recuperar os benefícios exclusivos.",
+          type: "info",
+          timestamp: "Agora",
+          dateGroup: "today",
+          isRead: false,
+          tag: "Assinatura",
+          badgeHighlight: "Plano Gratuito",
+          status: "active",
+        });
+      }
+    }
+  }, []);
+
   // Apply dark mode class on document element
   useEffect(() => {
     if (state.user.themeMode === "dark") {
@@ -527,12 +557,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         plan: "free",
         isAutoRenew: false,
         cancelledAt: nowISO,
+        planExpiryDate: undefined,
+        premiumSince: undefined,
       },
     }));
 
     addNotification({
       title: "Assinatura Cancelada",
-      message: "Seu plano Fluxo Premium foi cancelado com sucesso sem cobranças adicionais.",
+      message: "Sua assinatura foi cancelada e você retornou ao plano gratuito. Assine novamente do zero para ter acesso Premium.",
       type: "info",
       timestamp: "Agora",
       dateGroup: "today",

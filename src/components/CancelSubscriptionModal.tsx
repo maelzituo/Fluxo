@@ -70,7 +70,7 @@ export const CancelSubscriptionModal: React.FC<CancelSubscriptionModalProps> = (
             </div>
             <h3 className="text-lg font-bold text-on-surface">Assinatura Cancelada</h3>
             <p className="text-xs text-outline leading-relaxed max-w-xs mx-auto">
-              O cancelamento da cobrança recorrente foi concluído. Você poderá continuar utilizando os recursos do Premium até <strong className="text-on-surface">{expiryDate}</strong> sem nenhuma nova cobrança.
+              Sua assinatura foi cancelada com sucesso. Todos os benefícios Premium foram revogados e sua conta retornou ao plano gratuito.
             </p>
           </div>
         ) : (
@@ -85,17 +85,17 @@ export const CancelSubscriptionModal: React.FC<CancelSubscriptionModalProps> = (
               </div>
               <div className="flex items-center gap-1.5 text-xs text-outline">
                 <Calendar className="w-3.5 h-3.5" />
-                <span>Acesso mantido até: <strong className="text-on-surface font-semibold">{expiryDate}</strong></span>
+                <span>Renovação programada para: <strong className="text-on-surface font-semibold">{expiryDate}</strong></span>
               </div>
             </div>
 
             {/* Benefit loss warning */}
             <div className="space-y-2">
-              <p className="text-xs font-bold text-on-surface">Ao cancelar a renovação automática:</p>
+              <p className="text-xs font-bold text-on-surface">Ao cancelar sua assinatura hoje:</p>
               <ul className="text-xs text-outline space-y-1.5 list-disc pl-4">
-                <li>Sua conta não sofrerá nenhuma nova cobrança futura.</li>
-                <li>Os recursos avançados de IA e relatórios serão mantidos até {expiryDate}.</li>
-                <li>Você pode reativar seu plano a qualquer momento em 1 clique.</li>
+                <li>Sua conta retornará ao <strong>Plano Gratuito</strong> imediatamente.</li>
+                <li>Você perderá acesso aos recursos avançados de IA e relatórios.</li>
+                <li>Para usar o Premium novamente, será necessário realizar uma nova assinatura do zero.</li>
               </ul>
             </div>
 
