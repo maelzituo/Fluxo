@@ -37,7 +37,8 @@ export const ProfileView: React.FC = () => {
   } = useApp();
 
   const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
+  const [email, setEmail] = useState(user.email || "");
+  const [phone, setPhone] = useState(user.phone || "");
   const [pinInput, setPinInput] = useState(user.pinCode || "");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
@@ -134,7 +135,9 @@ export const ProfileView: React.FC = () => {
                 {isPremium ? "Premium Ativo" : "Plano Gratuito"}
               </span>
             </div>
-            <p className="text-xs text-outline">{user.email}</p>
+            <p className="text-xs text-outline font-medium">
+              @{user.username || "usuario"} {user.phone ? `• ${user.phone}` : ""} {user.email ? `• ${user.email}` : ""}
+            </p>
           </div>
 
           <button

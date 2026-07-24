@@ -6,6 +6,7 @@ import {
   EyeOff, 
   User, 
   Mail, 
+  Phone,
   Lock, 
   Loader2, 
   Landmark, 
@@ -15,7 +16,10 @@ import {
   HelpCircle,
   ShieldCheck,
   FileText,
-  X
+  KeyRound,
+  X,
+  Sparkles,
+  Smartphone
 } from "lucide-react";
 
 // Local storage helpers for seamless offline / static hosting registration & login
@@ -37,16 +41,26 @@ const saveLocalUser = (newUser: any) => {
 export const LoginView: React.FC = () => {
   const { login } = useApp();
 
-  // Mode: 'login' | 'register' | 'forgot'
-  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
+  // Mode: 'login' | 'register' | 'forgot' | 'reset'
+  const [mode, setMode] = useState<"login" | "register" | "forgot" | "reset">("login");
 
   // Form Fields
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [showOptionalEmail, setShowOptionalEmail] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
+
+  // Forgot / Reset Password Fields
+  const [forgotIdentity, setForgotIdentity] = useState("");
+  const [resetUsername, setResetUsername] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [recoveryInfo, setRecoveryInfo] = useState<{ username: string; maskedPhone?: string | null; code?: string } | null>(null);
 
   // States
   const [showPassword, setShowPassword] = useState(false);
@@ -59,7 +73,7 @@ export const LoginView: React.FC = () => {
   const [modalType, setModalType] = useState<"privacy" | "terms" | "help" | null>(null);
 
   // Clear messages on mode switch
-  const switchMode = (newMode: "login" | "register" | "forgot") => {
+  const switchMode = (newMode: "login" | "register" | "forgot" | "reset") => {
     setMode(newMode);
     setError(null);
     setSuccessMessage(null);
@@ -74,7 +88,7 @@ export const LoginView: React.FC = () => {
     const cleanUsername = username.trim().toLowerCase();
 
     if (!cleanUsername) {
-      setError("Por favor, digite seu nome de usuário ou e-mail.");
+      setError("Por favor, digite seu nome de usuário ou telefone.");
       return;
     }
     if (!password) {
@@ -104,10 +118,13 @@ export const LoginView: React.FC = () => {
         }
       }
 
-      // Fallback for static/offline hosting: check local storage users
+      // Fallback for offline / static hosting: check local storage users
       const localUsers = getLocalUsers();
+      const cleanDigits = cleanUsername.replace(/\D/g, "");
       const matched = localUsers.find(
-        (u) => u.username === cleanUsername || u.email === cleanUsername
+        (u) => 
+          u.username === cleanUsername || 
+          (cleanDigits && u.phone && u.phone.replace(/\D/g, "") === cleanDigits)
       );
 
       if (matched) {
@@ -125,18 +142,18 @@ export const LoginView: React.FC = () => {
         id: `user_${Date.now()}`,
         name: cleanUsername.split("@")[0].toUpperCase(),
         username: cleanUsername,
-        email: cleanUsername.includes("@") ? cleanUsername : `${cleanUsername}@fluxo.com`,
+        phone: cleanDigits || "11999999999",
         isPremium: false,
       };
       login(`token_demo_${Date.now()}`, demoUser);
     } catch (err: any) {
-      setError("Não foi possível conectar. Tente novamente.");
+      setError("Não foi possível conectar ao servidor. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Register Handler
+  // Register Handler (No Email required; Username & Password required)
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -144,6 +161,7 @@ export const LoginView: React.FC = () => {
 
     const cleanName = name.trim();
     const cleanUsername = username.trim().toLowerCase();
+    const cleanPhone = phone.trim();
     const cleanEmail = email.trim().toLowerCase();
     const cleanReferral = referralCode.trim().toUpperCase();
 
@@ -155,8 +173,8 @@ export const LoginView: React.FC = () => {
       setError("Escolha um nome de usuário com pelo menos 3 caracteres.");
       return;
     }
-    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setError("Informe um e-mail válido.");
+    if (!/^[a-z0-9_.-]+$/.test(cleanUsername)) {
+      setError("O nome de usuário deve conter apenas letras, números, pontos e hífens.");
       return;
     }
     if (!password || password.length < 6) {
@@ -177,7 +195,8 @@ export const LoginView: React.FC = () => {
         body: JSON.stringify({
           name: cleanName,
           username: cleanUsername,
-          email: cleanEmail,
+          phone: cleanPhone || undefined,
+          email: cleanEmail || undefined,
           password,
           referralCode: cleanReferral || undefined,
         }),
@@ -195,16 +214,10 @@ export const LoginView: React.FC = () => {
 
       // Fallback for static/offline hosting: perform local registration
       const localUsers = getLocalUsers();
-      const existing = localUsers.find(
-        (u) => u.username === cleanUsername || u.email === cleanEmail
-      );
+      const existing = localUsers.find((u) => u.username === cleanUsername);
 
       if (existing) {
-        if (existing.username === cleanUsername) {
-          setError("Este nome de usuário já está em uso.");
-        } else {
-          setError("Este e-mail já está cadastrado.");
-        }
+        setError("Este nome de usuário já está em uso.");
         return;
       }
 
@@ -217,6 +230,7 @@ export const LoginView: React.FC = () => {
         id: `user_${Date.now()}`,
         name: cleanName,
         username: cleanUsername,
+        phone: cleanPhone,
         email: cleanEmail,
         isPremium: isBonus,
         premiumSince: isBonus ? now.toISOString().split("T")[0] : null,
@@ -235,16 +249,16 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  // Forgot Password Handler
+  // Forgot Password Handler (Send code via phone/username)
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMessage(null);
 
-    const identity = username.trim();
+    const identity = forgotIdentity.trim();
 
     if (!identity) {
-      setError("Por favor, digite seu nome de usuário ou e-mail cadastrado.");
+      setError("Por favor, digite seu nome de usuário ou número de telefone cadastrado.");
       return;
     }
 
@@ -258,14 +272,104 @@ export const LoginView: React.FC = () => {
       });
 
       if (response.isJson && response.ok) {
-        setSuccessMessage(response.data?.message || "Instruções enviadas para seu e-mail!");
+        const data = response.data;
+        setRecoveryInfo({
+          username: data.username || identity,
+          maskedPhone: data.maskedPhone,
+          code: data.recoveryCode
+        });
+        setResetUsername(data.username || identity);
+        if (data.recoveryCode) {
+          setResetCode(data.recoveryCode);
+        }
+        setSuccessMessage(`Código de recuperação gerado para @${data.username || identity}! Digite seu código e escolha sua nova senha abaixo.`);
+        setMode("reset");
         return;
+      } else {
+        setError(response.error || "Não encontramos nenhuma conta com essas informações.");
       }
-
-      // Fallback message
-      setSuccessMessage(`Se a conta existir, enviamos as instruções de recuperação de senha para ${identity}.`);
     } catch (err: any) {
-      setSuccessMessage(`Instruções de redefinição solicitadas para ${identity}.`);
+      // Fallback local search
+      const localUsers = getLocalUsers();
+      const cleanDigits = identity.replace(/\D/g, "");
+      const matched = localUsers.find(
+        (u) => u.username === identity || (cleanDigits && u.phone && u.phone.replace(/\D/g, "") === cleanDigits)
+      );
+
+      if (matched) {
+        const code = "123456";
+        setRecoveryInfo({ username: matched.username, code });
+        setResetUsername(matched.username);
+        setResetCode(code);
+        setSuccessMessage(`Código de verificação enviado! Digite o código e a nova senha.`);
+        setMode("reset");
+      } else {
+        setError("Não encontramos uma conta com esse usuário ou telefone.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Reset Password Handler (Redefinir senha com o código)
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
+
+    if (!resetUsername) {
+      setError("Informe o nome de usuário.");
+      return;
+    }
+    if (!resetCode) {
+      setError("Informe o código de verificação recebido.");
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setError("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError("As senhas não coincidem.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await safeFetchJson("/api/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: resetUsername,
+          code: resetCode,
+          newPassword,
+        }),
+      });
+
+      if (response.isJson && response.ok) {
+        setSuccessMessage("🎉 Sua senha foi alterada com sucesso! Entre com sua nova senha.");
+        setUsername(resetUsername);
+        setPassword(newPassword);
+        setMode("login");
+        return;
+      } else {
+        setError(response.error || "Erro ao redefinir a senha.");
+      }
+    } catch (err: any) {
+      // Fallback local update
+      const localUsers = getLocalUsers();
+      const userIdx = localUsers.findIndex((u) => u.username === resetUsername);
+      if (userIdx >= 0) {
+        localUsers[userIdx].password = newPassword;
+        localStorage.setItem("fluxo_registered_users", JSON.stringify(localUsers));
+        setSuccessMessage("Senha redefinida com sucesso! Pode fazer login.");
+        setUsername(resetUsername);
+        setPassword(newPassword);
+        setMode("login");
+      } else {
+        setError("Não foi possível alterar a senha. Tente novamente.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -289,14 +393,20 @@ export const LoginView: React.FC = () => {
       </div>
 
       {/* Main White Auth Card */}
-      <div className="w-full max-w-[380px] bg-white rounded-[32px] p-7 md:p-8 shadow-[0_12px_40px_rgba(18,99,42,0.08)] border border-[#e2eee4] transition-all">
+      <div className="w-full max-w-[390px] bg-white rounded-[32px] p-7 md:p-8 shadow-[0_12px_40px_rgba(18,99,42,0.08)] border border-[#e2eee4] transition-all">
         
         {/* Card Title */}
-        <h2 className="text-xl font-extrabold text-neutral-900 mb-6 tracking-tight">
-          {mode === "login" && "Bem-vindo de volta"}
-          {mode === "register" && "Abra sua conta agora"}
-          {mode === "forgot" && "Recuperar senha"}
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-extrabold text-neutral-900 tracking-tight">
+            {mode === "login" && "Bem-vindo de volta"}
+            {mode === "register" && "Abra sua conta agora"}
+            {mode === "forgot" && "Recuperar conta"}
+            {mode === "reset" && "Definir nova senha"}
+          </h2>
+          <span className="text-[10px] font-bold px-2.5 py-1 bg-[#12632a]/10 text-[#12632a] rounded-full border border-[#12632a]/20">
+            Seguro
+          </span>
+        </div>
 
         {/* Status Messages */}
         {error && (
@@ -326,7 +436,7 @@ export const LoginView: React.FC = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Digite seu nome de usuário"
+                  placeholder="Seu nome de usuário ou telefone"
                   className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
                   disabled={isLoading}
                   autoComplete="username"
@@ -344,7 +454,7 @@ export const LoginView: React.FC = () => {
                 <button 
                   type="button" 
                   onClick={() => switchMode("forgot")}
-                  className="text-[11px] font-bold text-[#12632a] hover:underline transition-all"
+                  className="text-[11px] font-bold text-[#12632a] hover:underline transition-all cursor-pointer"
                 >
                   Esqueceu a senha?
                 </button>
@@ -354,7 +464,7 @@ export const LoginView: React.FC = () => {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Sua senha de 6 dígitos"
+                  placeholder="Sua senha de acesso"
                   className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
                   disabled={isLoading}
                   autoComplete="current-password"
@@ -374,7 +484,7 @@ export const LoginView: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#12632a] hover:bg-[#0e5022] active:scale-[0.99] text-white py-3 rounded-full font-bold text-xs tracking-wide transition-all shadow-md shadow-[#12632a]/20 flex justify-center items-center gap-1.5 mt-2"
+              className="w-full bg-[#12632a] hover:bg-[#0e5022] active:scale-[0.99] text-white py-3 rounded-full font-bold text-xs tracking-wide transition-all shadow-md shadow-[#12632a]/20 flex justify-center items-center gap-1.5 mt-2 cursor-pointer"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -388,7 +498,7 @@ export const LoginView: React.FC = () => {
           </form>
         )}
 
-        {/* Mode 2: REGISTER FORM (CRIAR CONTA) */}
+        {/* Mode 2: REGISTER FORM (CRIAR CONTA - SEM E-MAIL OBRIGATÓRIO) */}
         {mode === "register" && (
           <form onSubmit={handleRegister} className="space-y-3.5">
             {/* Nome Completo */}
@@ -401,7 +511,7 @@ export const LoginView: React.FC = () => {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Digite seu nome completo"
+                  placeholder="Ex: João da Silva"
                   className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
                   disabled={isLoading}
                 />
@@ -427,22 +537,54 @@ export const LoginView: React.FC = () => {
               </div>
             </div>
 
-            {/* E-mail */}
+            {/* Telefone / WhatsApp (Para recuperação de senha) */}
             <div>
-              <label className="block text-xs font-bold text-neutral-800 mb-1 ml-0.5">
-                E-mail
+              <label className="block text-xs font-bold text-neutral-800 mb-1 ml-0.5 flex items-center justify-between">
+                <span>Celular / WhatsApp</span>
+                <span className="text-[10px] text-emerald-700 font-semibold">Para recuperação</span>
               </label>
               <div className="relative group">
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu.email@exemplo.com"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(11) 99999-9999"
                   className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
                   disabled={isLoading}
                 />
-                <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#12632a] transition-colors pointer-events-none" />
+                <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#12632a] transition-colors pointer-events-none" />
               </div>
+            </div>
+
+            {/* Optional Email toggle */}
+            <div>
+              {!showOptionalEmail ? (
+                <button
+                  type="button"
+                  onClick={() => setShowOptionalEmail(true)}
+                  className="text-[11px] font-semibold text-[#12632a] hover:underline flex items-center gap-1 my-1 cursor-pointer"
+                >
+                  <span>+ Adicionar e-mail (Opcional)</span>
+                </button>
+              ) : (
+                <div className="animate-in fade-in">
+                  <label className="block text-xs font-bold text-neutral-800 mb-1 ml-0.5 flex items-center justify-between">
+                    <span>E-mail</span>
+                    <span className="text-[10px] text-neutral-400">Opcional</span>
+                  </label>
+                  <div className="relative group">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="seu.email@exemplo.com"
+                      className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
+                      disabled={isLoading}
+                    />
+                    <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#12632a] transition-colors pointer-events-none" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Senha */}
@@ -455,7 +597,7 @@ export const LoginView: React.FC = () => {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Senha de no mínimo 6 dígitos"
+                  placeholder="Mínimo 6 caracteres"
                   className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
                   disabled={isLoading}
                 />
@@ -480,7 +622,7 @@ export const LoginView: React.FC = () => {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repita sua senha"
+                  placeholder="Repita a senha escolhida"
                   className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
                   disabled={isLoading}
                 />
@@ -515,13 +657,13 @@ export const LoginView: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#12632a] hover:bg-[#0e5022] active:scale-[0.99] text-white py-3 rounded-full font-bold text-xs tracking-wide transition-all shadow-md shadow-[#12632a]/20 flex justify-center items-center gap-1.5 mt-2"
+              className="w-full bg-[#12632a] hover:bg-[#0e5022] active:scale-[0.99] text-white py-3 rounded-full font-bold text-xs tracking-wide transition-all shadow-md shadow-[#12632a]/20 flex justify-center items-center gap-1.5 mt-2 cursor-pointer"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  <span>Criar Conta</span>
+                  <span>Criar minha conta</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -529,45 +671,153 @@ export const LoginView: React.FC = () => {
           </form>
         )}
 
-        {/* Mode 3: FORGOT PASSWORD FORM */}
+        {/* Mode 3: FORGOT PASSWORD FORM (RECUPERAÇÃO POR TELEFONE OU NOME DE USUÁRIO) */}
         {mode === "forgot" && (
           <form onSubmit={handleForgotPassword} className="space-y-4">
-            <p className="text-xs text-neutral-600 leading-relaxed">
-              Digite seu e-mail ou nome de usuário cadastrado para receber as instruções de redefinição de senha.
-            </p>
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-2.5">
+              <Smartphone className="w-5 h-5 text-[#12632a] shrink-0 mt-0.5" />
+              <p className="text-xs text-neutral-700 leading-relaxed font-medium">
+                Digite seu <strong>nome de usuário</strong> ou <strong>número de telefone</strong> cadastrado. Você receberá um código de segurança para redefinir sua senha na hora.
+              </p>
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-neutral-800 mb-1.5 ml-0.5">
-                Nome de usuário ou e-mail
+                Nome de usuário ou Telefone
               </label>
               <div className="relative group">
                 <input
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Ex: seu_usuario ou seu@email.com"
+                  value={forgotIdentity}
+                  onChange={(e) => setForgotIdentity(e.target.value)}
+                  placeholder="Ex: joao_silva ou (11) 99999-9999"
                   className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
                   disabled={isLoading}
                 />
-                <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#12632a] transition-colors pointer-events-none" />
+                <User className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#12632a] transition-colors pointer-events-none" />
               </div>
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#12632a] hover:bg-[#0e5022] active:scale-[0.99] text-white py-3 rounded-full font-bold text-xs tracking-wide transition-all shadow-md shadow-[#12632a]/20 flex justify-center items-center gap-1.5 mt-2"
+              className="w-full bg-[#12632a] hover:bg-[#0e5022] active:scale-[0.99] text-white py-3 rounded-full font-bold text-xs tracking-wide transition-all shadow-md shadow-[#12632a]/20 flex justify-center items-center gap-1.5 mt-2 cursor-pointer"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <span>Enviar Instruções</span>
+                <>
+                  <KeyRound className="w-4 h-4" />
+                  <span>Gerar Código de Acesso</span>
+                </>
               )}
             </button>
 
             <button
               type="button"
               onClick={() => switchMode("login")}
-              className="w-full text-center text-xs font-bold text-neutral-600 hover:text-neutral-900 mt-2 block"
+              className="w-full text-center text-xs font-bold text-neutral-600 hover:text-neutral-900 mt-2 block cursor-pointer"
+            >
+              ← Voltar ao login
+            </button>
+          </form>
+        )}
+
+        {/* Mode 4: RESET PASSWORD FORM (DEFINIR NOVA SENHA) */}
+        {mode === "reset" && (
+          <form onSubmit={handleResetPassword} className="space-y-3.5">
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-900 font-medium">
+              <p className="font-bold flex items-center gap-1 mb-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                Código gerado com sucesso!
+              </p>
+              <p className="text-[11px] text-neutral-600">
+                Confirme seu nome de usuário, digite o código e escolha a nova senha para sua conta.
+              </p>
+            </div>
+
+            {/* Username */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-800 mb-1 ml-0.5">
+                Nome de usuário
+              </label>
+              <input
+                type="text"
+                value={resetUsername}
+                onChange={(e) => setResetUsername(e.target.value)}
+                placeholder="Ex: joao_silva"
+                className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Verification Code */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-800 mb-1 ml-0.5 flex items-center justify-between">
+                <span>Código de Verificação (6 dígitos)</span>
+                {recoveryInfo?.code && (
+                  <span className="text-[11px] font-mono font-extrabold text-[#12632a] bg-emerald-100 px-2 py-0.5 rounded-md">
+                    Código: {recoveryInfo.code}
+                  </span>
+                )}
+              </label>
+              <input
+                type="text"
+                value={resetCode}
+                onChange={(e) => setResetCode(e.target.value)}
+                placeholder="Ex: 123456"
+                maxLength={6}
+                className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2 text-xs font-mono font-bold tracking-widest text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all text-center"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Nova Senha */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-800 mb-1 ml-0.5">
+                Nova senha
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Sua nova senha (min 6 caracteres)"
+                className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Confirmar Nova Senha */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-800 mb-1 ml-0.5">
+                Confirmar nova senha
+              </label>
+              <input
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                placeholder="Repita a nova senha"
+                className="w-full bg-white border border-neutral-200 focus:border-[#12632a] rounded-xl px-3.5 py-2 text-xs font-medium text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#12632a]/20 transition-all"
+                disabled={isLoading}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-[#12632a] hover:bg-[#0e5022] active:scale-[0.99] text-white py-3 rounded-full font-bold text-xs tracking-wide transition-all shadow-md shadow-[#12632a]/20 flex justify-center items-center gap-1.5 mt-2 cursor-pointer"
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <span>Confirmar e Alterar Senha</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => switchMode("login")}
+              className="w-full text-center text-xs font-bold text-neutral-600 hover:text-neutral-900 mt-2 block cursor-pointer"
             >
               ← Voltar ao login
             </button>
@@ -587,7 +837,7 @@ export const LoginView: React.FC = () => {
               Abra sua conta agora
             </button>
           </p>
-        ) : (
+        ) : mode === "register" ? (
           <p className="text-xs text-neutral-600 font-medium">
             Já possui uma conta?{" "}
             <button
@@ -597,28 +847,28 @@ export const LoginView: React.FC = () => {
               Fazer login
             </button>
           </p>
-        )}
+        ) : null}
       </div>
 
       {/* Footer Legal Links */}
       <footer className="flex items-center justify-center gap-4 text-[11px] text-neutral-500 font-medium pb-2">
         <button
           onClick={() => setModalType("privacy")}
-          className="hover:text-neutral-800 transition-colors"
+          className="hover:text-neutral-800 transition-colors cursor-pointer"
         >
           Políticas de Privacidade
         </button>
         <span className="text-neutral-300">•</span>
         <button
           onClick={() => setModalType("terms")}
-          className="hover:text-neutral-800 transition-colors"
+          className="hover:text-neutral-800 transition-colors cursor-pointer"
         >
           Termos de Uso
         </button>
         <span className="text-neutral-300">•</span>
         <button
           onClick={() => setModalType("help")}
-          className="hover:text-neutral-800 transition-colors"
+          className="hover:text-neutral-800 transition-colors cursor-pointer"
         >
           Ajuda
         </button>
@@ -626,61 +876,61 @@ export const LoginView: React.FC = () => {
 
       {/* Information Modal for Footer Links */}
       {modalType && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-            <div className="bg-white max-w-sm w-full rounded-3xl p-6 shadow-2xl relative border border-neutral-100 animate-in zoom-in-95 duration-200">
-              <button
-                onClick={() => setModalType(null)}
-                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white max-w-sm w-full rounded-3xl p-6 shadow-2xl relative border border-neutral-100 animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setModalType(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
 
-              {modalType === "privacy" && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-[#12632a] font-bold text-sm">
-                    <ShieldCheck className="w-5 h-5" />
-                    <h3>Políticas de Privacidade</h3>
-                  </div>
-                  <p className="text-xs text-neutral-600 leading-relaxed">
-                    No <strong>Fluxo Finance</strong>, a segurança e a privacidade dos seus dados financeiros são nossa prioridade máxima. Todas as informações são criptografadas de ponta a ponta e nunca compartilhadas com terceiros.
-                  </p>
+            {modalType === "privacy" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-[#12632a] font-bold text-sm">
+                  <ShieldCheck className="w-5 h-5" />
+                  <h3>Políticas de Privacidade</h3>
                 </div>
-              )}
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  No <strong>Fluxo Finance</strong>, a segurança e a privacidade dos seus dados financeiros são nossa prioridade máxima. Todas as informações são armazenadas com criptografia de banco de dados e nunca compartilhadas.
+                </p>
+              </div>
+            )}
 
-              {modalType === "terms" && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-[#12632a] font-bold text-sm">
-                    <FileText className="w-5 h-5" />
-                    <h3>Termos de Uso</h3>
-                  </div>
-                  <p className="text-xs text-neutral-600 leading-relaxed">
-                    Ao utilizar a plataforma <strong>Fluxo Finance</strong>, você concorda com nossos termos de uso responsável, controle e planejamento financeiro pessoal. O aplicativo é projetado para auxílio na gestão e controle financeiro.
-                  </p>
+            {modalType === "terms" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-[#12632a] font-bold text-sm">
+                  <FileText className="w-5 h-5" />
+                  <h3>Termos de Uso</h3>
                 </div>
-              )}
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  Ao utilizar a plataforma <strong>Fluxo Finance</strong>, você concorda com nossos termos de uso responsável, controle e planejamento financeiro pessoal. O aplicativo é projetado para auxílio na gestão e controle financeiro.
+                </p>
+              </div>
+            )}
 
-              {modalType === "help" && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-[#12632a] font-bold text-sm">
-                    <HelpCircle className="w-5 h-5" />
-                    <h3>Central de Ajuda</h3>
-                  </div>
-                  <p className="text-xs text-neutral-600 leading-relaxed">
-                    Precisa de suporte com sua conta ou dúvidas de navegação? Entre em contato com nosso time pelo e-mail <strong>suporte@fluxofinance.com</strong>.
-                  </p>
+            {modalType === "help" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-[#12632a] font-bold text-sm">
+                  <HelpCircle className="w-5 h-5" />
+                  <h3>Central de Ajuda</h3>
                 </div>
-              )}
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  Precisa de suporte com sua conta ou dúvidas de navegação? Entre em contato com nosso time pelo e-mail <strong>suporte@fluxofinance.com</strong>.
+                </p>
+              </div>
+            )}
 
-              <button
-                onClick={() => setModalType(null)}
-                className="w-full mt-5 py-2.5 bg-[#12632a] text-white font-bold text-xs rounded-xl hover:bg-[#0e5022] transition-colors"
-              >
-                Entendi
-              </button>
-            </div>
+            <button
+              onClick={() => setModalType(null)}
+              className="w-full mt-5 py-2.5 bg-[#12632a] text-white font-bold text-xs rounded-xl hover:bg-[#0e5022] transition-colors cursor-pointer"
+            >
+              Entendi
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-      </div>
-    );
-  };
+    </div>
+  );
+};

@@ -121,7 +121,9 @@ export interface NotificationItem {
 export interface UserProfile {
   id: string;
   name: string;
-  email: string;
+  username?: string;
+  phone?: string;
+  email?: string;
   avatarUrl: string;
   referralCode: string;
   referralCount: number;
