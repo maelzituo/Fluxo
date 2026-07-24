@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
+import { safeFetchJson } from "../lib/api";
 import { TransactionType, PaymentMethod } from "../types";
 import { 
   X, 
@@ -48,7 +49,7 @@ export const TransactionModal: React.FC = () => {
     setAiTip("");
 
     try {
-      const res = await fetch("/api/ai/categorize", {
+      const res = await safeFetchJson("/api/ai/categorize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -58,15 +59,16 @@ export const TransactionModal: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
-      if (data.category) {
+      if (res.isJson && res.ok && res.data?.category) {
         const foundCat = categories.find((c) =>
-          c.name.toLowerCase().includes(data.category.toLowerCase())
+          c.name.toLowerCase().includes(res.data.category.toLowerCase())
         );
         if (foundCat) {
           setCategoryId(foundCat.id);
         }
-        setAiTip(`IA: Categorizado como "${data.category}" (${data.reasoning})`);
+        setAiTip(`IA: Categorizado como "${res.data.category}" (${res.data.reasoning || 'baseado no título'})`);
+      } else {
+        setAiTip("IA: Não foi possível categorizar automaticamente.");
       }
     } catch (err) {
       console.error(err);

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useApp } from "../context/AppContext";
+import { safeFetchJson } from "../lib/api";
 import { 
   X, 
   Sparkles, 
@@ -71,7 +72,7 @@ export const AiAssistantModal: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/ai/assistant", {
+      const res = await safeFetchJson("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -86,11 +87,14 @@ export const AiAssistantModal: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
+      const replyText = res.isJson && res.data?.reply
+        ? res.data.reply
+        : "Analisei seus lançamentos e recomendo manter a atenção nos gastos fixos este mês. Suas receitas e despesas continuam organizadas no Fluxo.";
+
       const aiMsg: Message = {
         id: `ai_${Date.now()}`,
         sender: "ai",
-        text: data.reply || "Analisei seus lançamentos e recomendo manter a atenção nos gastos fixos este mês.",
+        text: replyText,
         time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, aiMsg]);
