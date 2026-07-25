@@ -117,7 +117,7 @@ export const LoginView: React.FC = () => {
           return;
         }
       } else {
-        setError("Erro inesperado no servidor.");
+        setError(response.error || "Erro inesperado no servidor.");
       }
     } catch (err: any) {
       setError("Não foi possível conectar ao servidor. Tente novamente.");
@@ -184,7 +184,7 @@ export const LoginView: React.FC = () => {
           return;
         }
       } else {
-         setError("Erro inesperado no servidor.");
+         setError(response.error || "Erro inesperado no servidor.");
       }
     } catch (err: any) {
       setError("Não foi possível criar a conta. Tente novamente.");

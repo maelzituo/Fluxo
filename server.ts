@@ -70,6 +70,12 @@ async function findUserByIdentity(identity: string) {
 
     const { data, error } = await query.limit(1);
 
+    if (error) {
+      if (error.message?.includes("Invalid API key") || error.message?.includes("JWT")) {
+        throw new Error("A chave da API do Supabase é inválida. Configure SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_ANON_KEY nas configurações do AI Studio.");
+      }
+    }
+
     if (!error && data && data.length > 0) {
       const u = data[0];
       return {
@@ -163,12 +169,16 @@ async function saveUser(user: any) {
 
     const { error } = await supabase.from("users").upsert(supabasePayload, { onConflict: "id" });
     if (error) {
+      if (error.message?.includes("Invalid API key") || error.message?.includes("JWT")) {
+        throw new Error("A chave da API do Supabase é inválida. Configure SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_ANON_KEY nas configurações do AI Studio.");
+      }
       console.warn("[Supabase] Table upsert warning (table created on first query):", error.message);
     } else {
       console.log(`[Supabase] Usuário @${user.username} salvo no Supabase com sucesso!`);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn("[Supabase] Exceção ao salvar usuário:", err);
+    throw err; // Re-throw to cause API error instead of silent failure
   }
 }
 
@@ -296,9 +306,9 @@ app.post("/api/register", registerLimiter, async (req, res) => {
         referralCount: newUser.referralCount,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Register error:", error);
-    res.status(500).json({ error: "Erro ao criar conta. Tente novamente." });
+    res.status(500).json({ error: error.message || "Erro ao criar conta. Tente novamente." });
   }
 });
 
@@ -347,9 +357,9 @@ app.post("/api/login", loginLimiter, async (req, res) => {
         referralCount: user.referralCount,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login error:", error);
-    res.status(500).json({ error: "Erro interno do servidor." });
+    res.status(500).json({ error: error.message || "Erro interno do servidor." });
   }
 });
 
@@ -387,9 +397,9 @@ app.post("/api/forgot-password", async (req, res) => {
       recoveryCode, // For smooth automated verification in UI
       message: `Código de recuperação gerado para @${user.username}. Digite o código para definir uma nova senha.`,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Forgot password error:", error);
-    res.status(500).json({ error: "Erro ao processar recuperação de senha." });
+    res.status(500).json({ error: error.message || "Erro ao processar recuperação de senha." });
   }
 });
 
@@ -427,9 +437,9 @@ app.post("/api/reset-password", async (req, res) => {
       success: true,
       message: "Senha alterada com sucesso! Você já pode fazer login com sua nova senha.",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Reset password error:", error);
-    res.status(500).json({ error: "Erro ao redefinir a senha." });
+    res.status(500).json({ error: error.message || "Erro ao redefinir a senha." });
   }
 });
 

@@ -13,7 +13,32 @@ export async function safeFetchJson<T = any>(
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   try {
-    const res = await fetch(url, options);
+    const fetchOptions: RequestInit = {
+      credentials: "include", // Required for AI Studio proxy authentication
+      ...options,
+    };
+    
+    // Add JWT Token if available
+    const token = localStorage.getItem("fluxo_jwt_token");
+    if (token) {
+      fetchOptions.headers = {
+        ...fetchOptions.headers,
+        "Authorization": `Bearer ${token}`
+      };
+    }
+
+    const res = await fetch(url, fetchOptions);
+    
+    if (res.url && res.url.includes("__cookie_check.html")) {
+      return {
+        ok: false,
+        status: 401,
+        data: {} as T,
+        isJson: false,
+        error: "Sessão bloqueada pelo navegador. Por favor, abra o aplicativo em uma nova aba (ícone de seta no topo) para fazer login."
+      };
+    }
+
     const contentType = res.headers.get("content-type") || "";
     
     if (contentType.includes("application/json")) {
